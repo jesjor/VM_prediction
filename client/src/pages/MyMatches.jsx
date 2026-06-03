@@ -180,7 +180,7 @@ export default function MyMatches({ participantId }) {
   }, 0)
 
   const finishedWithPred = matches.filter(m => m.status === 'finished' && predMap[m.id]).length
-  const totalPossible = finishedWithPred * 9
+  const totalPossible = finishedWithPred * 12
 
   return (
     <div>

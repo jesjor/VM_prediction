@@ -111,14 +111,14 @@ export default function Profile() {
 
               <div className="card">
                 <div className="section-title" style={{ marginTop: 0 }}>🃏 Øvrige gæt</div>
-                <Row label="🟡 Flest gule (spiller)" value={t.most_yellow_player} pts={t.most_yellow_team ? `(${t.most_yellow_team})` : ''} />
+                <Row label="🟡 Flest gule (spiller) — 20 pt" value={t.most_yellow_player} pts={t.most_yellow_team ? `(${t.most_yellow_team})` : ''} />
                 <Row label="🟡 Flest gule (hold)" value={t.most_yellow_team_overall} />
-                <Row label="🔴 Flest røde (spiller)" value={t.most_red_player} pts={t.most_red_team ? `(${t.most_red_team})` : ''} />
+                <Row label="🔴 Flest røde (spiller) — 20 pt" value={t.most_red_player} pts={t.most_red_team ? `(${t.most_red_team})` : ''} />
                 <Row label="🔴 Flest røde (hold)" value={t.most_red_team_overall} />
-                <Row label="🃏 Flest kortpoint (spiller)" value={t.most_card_pts_player} pts={t.most_card_pts_player_team ? `(${t.most_card_pts_player_team})` : ''} />
+                <Row label="🃏 Flest kortpoint (spiller) — 20 pt" value={t.most_card_pts_player} pts={t.most_card_pts_player_team ? `(${t.most_card_pts_player_team})` : ''} />
                 <Row label="🃏 Flest kortpoint (hold)" value={t.most_card_pts_team} />
                 <Row label="⭐ Flest MVP" value={t.most_mvp_player} pts={t.most_mvp_team ? `(${t.most_mvp_team})` : ''} />
-                <Row label="🌟 Turneringsspiller (25 pt)" value={t.tournament_player} pts={t.tournament_player_team ? `(${t.tournament_player_team})` : ''} />
+                <Row label="🌟 Turneringsspiller — 25 pt" value={t.tournament_player} pts={t.tournament_player_team ? `(${t.tournament_player_team})` : ''} />
                 <Row label="🛡️ Færrest mål ind" value={t.least_goals_conceded} />
                 <Row label="⚡ Flest mål scoret" value={t.most_goals_scored} />
               </div>

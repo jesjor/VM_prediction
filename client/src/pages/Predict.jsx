@@ -30,7 +30,7 @@ function TeamPlayerPicker({ label, teamKey, playerKey, data, onChange, squads, p
   )
 }
 
-function Top3PlayerPicker({ label, prefix, data, onChange, squads, ptsArr=[5,3,1] }) {
+function Top3PlayerPicker({ label, prefix, data, onChange, squads, ptsArr=[20,15,10] }) {
   return (
     <div style={{marginBottom:'1rem'}}>
       <div className="section-title">{label}</div>
@@ -324,10 +324,26 @@ export default function Predict() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
 
+  const [ranking, setRanking] = useState(null)
+
   useEffect(() => {
     api.get('/squads').then(r=>setSquads(r.data)).catch(()=>{})
     api.get('/matches').then(r=>setMatches(r.data)).catch(()=>{})
   }, [])
+
+  // Load ranking when participant is known
+  useEffect(() => {
+    if (!participant) return
+    api.get('/participants').then(r => {
+      const sorted = r.data
+      const idx = sorted.findIndex(p => p.id === participant.id)
+      if (idx !== -1) {
+        const me = sorted[idx]
+        const leader = sorted[0]
+        setRanking({ rank: idx+1, total: sorted.length, pts: me.total_pts, gap: leader.total_pts - me.total_pts, leaderName: leader.name })
+      }
+    }).catch(()=>{})
+  }, [participant])
 
   async function login() {
     if (!name.trim()) return setMsg('Indtast dit navn')
@@ -402,8 +418,23 @@ export default function Predict() {
           <div className="page-title" style={{fontSize:'clamp(20px,5vw,30px)'}}>Mine gæt</div>
           <div className="page-sub">{participant.name}</div>
         </div>
-        <button className="btn btn-sm" onClick={()=>{setStep('login');setParticipant(null)}}>Skift</button>
+        <button className="btn btn-sm" onClick={()=>{setStep('login');setParticipant(null);setRanking(null)}}>Skift</button>
       </div>
+
+      {ranking && (
+        <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:ranking.rank===1?'var(--gold)':ranking.rank<=3?'var(--green)':'var(--text)'}}>
+            #{ranking.rank}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600}}>
+              {ranking.rank===1?'🏆 Du fører — godt gættet!':`${ranking.gap} pt fra førstepladsen (${ranking.leaderName})`}
+            </div>
+            <div style={{fontSize:12,color:'var(--text3)'}}>{ranking.pts} pt · {ranking.rank} af {ranking.total} deltagere</div>
+          </div>
+          <a href="/" style={{fontSize:13,color:'var(--blue)',textDecoration:'none',flexShrink:0}}>Se alle →</a>
+        </div>
+      )}
 
       <div className="tabs">
         <button className={`tab-btn${tab==='tournament'?' active':''}`} onClick={()=>setTab('tournament')}>🏆 Turnering</button>
@@ -423,7 +454,7 @@ export default function Predict() {
 
             <div className="section-title">🌍 Slutstilling (VM vinder/2./3.)</div>
             <div className="alert alert-warn" style={{fontSize:13,padding:'7px 10px',marginBottom:8}}>
-              💡 Samme land må vælges på alle 3 pladser. Kun eksakt plads giver point.
+              💡 Top X logik: gætter du Top 2, og holdet vinder VM, giver det 15 pt. Samme hold må vælges alle 3 steder.
             </div>
             {[['country_1','🥇 Vinder af VM','20 pt'],['country_2','🥈 2. plads','15 pt'],['country_3','🥉 3. plads','10 pt']].map(([key,label,pts])=>(
               <div key={key} className="form-group">
@@ -439,24 +470,29 @@ export default function Predict() {
 
           <div className="card">
             <div className="section-title">🃏 Øvrige kategorier</div>
-            <TeamPlayerPicker label="🟡 Flest gule kort — spiller" teamKey="most_yellow_team" playerKey="most_yellow_player" data={tournPred} onChange={setTournPred} squads={squads} pts="3 pt" />
+            <TeamPlayerPicker label="🟡 Flest gule kort — spiller" teamKey="most_yellow_team" playerKey="most_yellow_player" data={tournPred} onChange={setTournPred} squads={squads} pts="20 pt" />
             <div className="form-group">
-              <div className="form-label">🟡 Flest gule kort — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 3 pt</span></div>
+              <div className="form-label">🟡 Flest gule kort — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 20 pt</span></div>
               {sel('most_yellow_team_overall', tournPred.most_yellow_team_overall||'', ALL_TEAMS, v=>setTournPred(d=>({...d,most_yellow_team_overall:v})),'— Vælg hold —')}
             </div>
-            <TeamPlayerPicker label="🔴 Flest røde kort — spiller" teamKey="most_red_team" playerKey="most_red_player" data={tournPred} onChange={setTournPred} squads={squads} pts="3 pt" />
+            <TeamPlayerPicker label="🔴 Flest røde kort — spiller" teamKey="most_red_team" playerKey="most_red_player" data={tournPred} onChange={setTournPred} squads={squads} pts="20 pt" />
             <div className="form-group">
-              <div className="form-label">🔴 Flest røde kort — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 3 pt</span></div>
+              <div className="form-label">🔴 Flest røde kort — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 20 pt</span></div>
               {sel('most_red_team_overall', tournPred.most_red_team_overall||'', ALL_TEAMS, v=>setTournPred(d=>({...d,most_red_team_overall:v})),'— Vælg hold —')}
             </div>
-            <TeamPlayerPicker label="⭐ Flest MVP-priser" teamKey="most_mvp_team" playerKey="most_mvp_player" data={tournPred} onChange={setTournPred} squads={squads} pts="3 pt" />
-            <TeamPlayerPicker label="🌟 Turneringsspiller (bedste spiller)" teamKey="tournament_player_team" playerKey="tournament_player" data={tournPred} onChange={setTournPred} squads={squads} pts="5 pt" />
+            <TeamPlayerPicker label="🃏 Flest kortpoint samlet — spiller" teamKey="most_card_pts_player_team" playerKey="most_card_pts_player" data={tournPred} onChange={setTournPred} squads={squads} pts="20 pt" />
             <div className="form-group">
-              <div className="form-label">🛡️ Færrest mål lukket ind — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 3 pt</span></div>
+              <div className="form-label">🃏 Flest kortpoint samlet — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 20 pt</span></div>
+              {sel('most_card_pts_team', tournPred.most_card_pts_team||'', ALL_TEAMS, v=>setTournPred(d=>({...d,most_card_pts_team:v})),'— Vælg hold —')}
+            </div>
+            <TeamPlayerPicker label="⭐ Flest MVP-priser — spiller" teamKey="most_mvp_team" playerKey="most_mvp_player" data={tournPred} onChange={setTournPred} squads={squads} pts="3 pt" />
+            <TeamPlayerPicker label="🌟 Turneringsspiller (bedste spiller)" teamKey="tournament_player_team" playerKey="tournament_player" data={tournPred} onChange={setTournPred} squads={squads} pts="25 pt" />
+            <div className="form-group">
+              <div className="form-label">🛡️ Færrest mål lukket ind — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 20 pt</span></div>
               {sel('least_goals_conceded', tournPred.least_goals_conceded||'', ALL_TEAMS, v=>setTournPred(d=>({...d,least_goals_conceded:v})),'— Vælg hold —')}
             </div>
             <div className="form-group">
-              <div className="form-label">⚡ Flest mål scoret — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 3 pt</span></div>
+              <div className="form-label">⚡ Flest mål scoret — hold <span style={{color:'var(--gold)',marginLeft:4}}>· 20 pt</span></div>
               {sel('most_goals_scored', tournPred.most_goals_scored||'', ALL_TEAMS, v=>setTournPred(d=>({...d,most_goals_scored:v})),'— Vælg hold —')}
             </div>
           </div>

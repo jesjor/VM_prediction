@@ -103,6 +103,8 @@ router.patch('/:id/result', requireAdmin, async (req, res) => {
 
     if (winner) await propagateWinner(client, parseInt(id), winner, hTeam, aTeam);
     await client.query('COMMIT');
+    // Auto-update group standings and propagate knockout slots
+    try { const { calcGroupStandings } = await import("../db/standings.js"); await calcGroupStandings(); } catch(e) { console.error("Standings update failed:", e.message); }
 
     const updated = await pool.query(`
       SELECT m.*, COALESCE(json_agg(me ORDER BY me.minute ASC) FILTER (WHERE me.id IS NOT NULL), '[]') as events
@@ -211,3 +213,12 @@ async function propagateWinner(client, matchId, winner, homeTeam, awayTeam) {
 }
 
 export default router;
+
+// GET group standings (public)
+router.get('/stats/standings', async (req, res) => {
+  try {
+    const { getGroupStandings } = await import('../db/standings.js');
+    const standings = await getGroupStandings();
+    res.json(standings);
+  } catch(err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
+});

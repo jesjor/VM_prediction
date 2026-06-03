@@ -66,7 +66,7 @@ export default function Leaderboard() {
       <div className="card" style={{marginTop:'1rem'}}>
         <div className="section-title">Hurtig pointoversigt</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px 16px'}}>
-          {[['VM vinder','20 pt'],['2. plads VM','15 pt'],['3. plads VM','10 pt'],['Gruppevindr','5 pt'],['Nr. 2 i gruppe','3 pt'],['Kampresultat','3 pt'],['Første målscorer','3 pt'],['Kampens spiller','3 pt'],['VM hold (pr. spiller)','5 pt'],['Bedste spiller','20 pt'],['Turneringsspiller','5 pt'],['Topscorer 1. plads','5 pt']].map(([l,p])=>(
+          {[['VM vinder','20 pt'],['2. plads VM','15 pt'],['3. plads VM','10 pt'],['Gruppevindr','5 pt'],['Nr. 2 i gruppe','3 pt'],['Kampresultat','3 pt'],['Første målscorer','3 pt'],['Kampens spiller','3 pt'],['Eksakt score','3 pt'],['Kort / disciplin','20 pt'],['VM hold (pr. spiller)','5 pt'],['Bedste spiller','25 pt'],['Turneringsspiller','25 pt'],['Topscorer top 1','20 pt']].map(([l,p])=>(
             <div key={l} style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:13,padding:'3px 0',borderBottom:'1px solid var(--border)'}}>
               <span style={{color:'var(--text2)'}}>{l}</span>
               <span style={{color:'var(--gold)',fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",fontSize:16}}>{p}</span>
