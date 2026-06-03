@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../api'
+import MyMatches from './MyMatches.jsx'
 
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const ALL_TEAMS = ['Algeria','Argentina','Australia','Austria','Belgium','Bosnia & Herzegovina','Brazil','Canada','Cape Verde','Colombia','Croatia','Curaçao','Czechia','DR Congo','Ecuador','Egypt','England','France','Germany','Ghana','Haiti','Iran','Iraq','Ivory Coast','Japan','Jordan','Mexico','Morocco','Netherlands','New Zealand','Norway','Panama','Paraguay','Portugal','Qatar','Saudi Arabia','Scotland','Senegal','South Africa','South Korea','Spain','Sweden','Switzerland','Tunisia','Türkiye','Uruguay','USA','Uzbekistan']
@@ -385,7 +386,8 @@ export default function Predict() {
 
       <div className="tabs">
         <button className={`tab-btn${tab==='tournament'?' active':''}`} onClick={()=>setTab('tournament')}>🏆 Turnering</button>
-        <button className={`tab-btn${tab==='matches'?' active':''}`} onClick={()=>setTab('matches')}>⚽ Kampe</button>
+        <button className={`tab-btn${tab==='matches'?' active':''}`} onClick={()=>setTab('matches')}>⚽ Afgiv gæt</button>
+        <button className={`tab-btn${tab==='mykampe'?' active':''}`} onClick={()=>setTab('mykampe')}>📊 Mine kampe</button>
         <button className={`tab-btn${tab==='dreamteam'?' active':''}`} onClick={()=>setTab('dreamteam')}>🌟 VM Hold</button>
       </div>
 
@@ -453,6 +455,10 @@ export default function Predict() {
               ))
           }
         </div>
+      )}
+
+      {tab==='mykampe' && (
+        <MyMatches participantId={participant.id} />
       )}
 
       {tab==='dreamteam' && (

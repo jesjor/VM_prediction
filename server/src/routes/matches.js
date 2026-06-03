@@ -118,9 +118,9 @@ router.patch('/:id/result', requireAdmin, async (req, res) => {
     for (const ev of events) {
       if (!ev.player || !ev.event_type) continue;
       await client.query(`
-        INSERT INTO match_events (match_id, team, player, event_type, minute)
-        VALUES ($1,$2,$3,$4,$5)
-      `, [id, ev.team, ev.player, ev.event_type, ev.minute || null]);
+        INSERT INTO match_events (match_id, team, player, event_type, minute, assist_player, assist_team)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `, [id, ev.team, ev.player, ev.event_type, ev.minute || null, ev.assist_player || null, ev.assist_team || null]);
     }
 
     // Propagate winner to knockout bracket

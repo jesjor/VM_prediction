@@ -1,4 +1,6 @@
-// VM 2026 - Komplet pointsystem (opdateret)
+// VM 2026 - Komplet pointsystem
+// Top X logik: gætter du plads 2, og spilleren ender på plads 1, giver det stadig point
+// fordi plads 1 er "inden for top 2". Men gætter du plads 1 og han ender på plads 2 = 0 point.
 
 const norm = s => (s || '').trim().toLowerCase();
 
@@ -7,58 +9,68 @@ export function calcTournamentPoints(prediction, results) {
   let pts = 0;
   const breakdown = [];
 
-  // Top 3 scorer & assist — kun eksakt plads tæller. Samme spiller på flere pladser = alle tæller hvis rigtig.
+  // Top 3 topscorer & assist
+  // Logik: gætter du plads i, og spilleren faktisk ender på plads j hvor j <= i → point for plads i
+  // Dvs. gætter du top 2, og han vinder (plads 1) → 15 pt (top 2 belønning)
+  // Men gætter du top 1, og han ender på plads 2 → 0 pt
+  // Samme spiller på alle 3 pladser: tjek alle 3 slots uafhængigt
+  const scorerPts = [20, 15, 10];
   for (const cat of [
     { label: 'Topscorer', prefix: 'topscorer' },
-    { label: 'Assist', prefix: 'assist' },
+    { label: 'Assist',    prefix: 'assist' },
   ]) {
-    const rvals = [1,2,3].map(i => norm(results[`${cat.prefix}_${i}_player`] || ''));
-    const pvals = [1,2,3].map(i => norm(prediction[`${cat.prefix}_${i}_player`] || ''));
-    const posP = [5, 3, 1];
-    pvals.forEach((pv, i) => {
-      if (!pv) return;
-      if (pv === rvals[i]) {
-        pts += posP[i];
-        breakdown.push({ cat: `${cat.label} ${i+1}. plads`, pts: posP[i] });
+    // Faktiske placeringer (indeks 0 = nr 1, indeks 1 = nr 2, indeks 2 = nr 3)
+    const actual = [1,2,3].map(i => norm(results[`${cat.prefix}_${i}_player`] || ''));
+    const guesses = [1,2,3].map(i => norm(prediction[`${cat.prefix}_${i}_player`] || ''));
+
+    guesses.forEach((gv, gi) => {
+      if (!gv) return;
+      // gi = 0 means "I bet this person is top 1" → only scores if actual[0] === gv
+      // gi = 1 means "I bet this person is top 2" → scores if actual[0] or actual[1] === gv
+      // gi = 2 means "I bet this person is top 3" → scores if actual[0], actual[1] or actual[2] === gv
+      const isWithinTop = actual.slice(0, gi + 1).includes(gv);
+      if (isWithinTop) {
+        pts += scorerPts[gi];
+        breakdown.push({ cat: `${cat.label} top ${gi+1}`, pts: scorerPts[gi] });
       }
-      // 0 point for forkert plads — ingen bonus
     });
   }
 
-  // Top 3 lande — Vinder: 20pt, 2. plads: 15pt, 3. plads: 10pt. Ingen bonus for forkert plads.
+  // Top 3 lande — samme Top X logik
   const countryPts = [20, 15, 10];
-  const rCountry = [1,2,3].map(i => norm(results[`country_${i}`] || ''));
-  const pCountry = [1,2,3].map(i => norm(prediction[`country_${i}`] || ''));
-  pCountry.forEach((pv, i) => {
-    if (!pv) return;
-    if (pv === rCountry[i]) {
-      pts += countryPts[i];
-      breakdown.push({ cat: ['Vinder af VM','2. plads VM','3. plads VM'][i], pts: countryPts[i] });
+  const actualCountry = [1,2,3].map(i => norm(results[`country_${i}`] || ''));
+  const guessCountry  = [1,2,3].map(i => norm(prediction[`country_${i}`] || ''));
+  guessCountry.forEach((gv, gi) => {
+    if (!gv) return;
+    const isWithinTop = actualCountry.slice(0, gi + 1).includes(gv);
+    if (isWithinTop) {
+      pts += countryPts[gi];
+      breakdown.push({ cat: ['VM vinder (top 1)','VM top 2','VM top 3'][gi], pts: countryPts[gi] });
     }
   });
 
-  // Gruppe: vinder 5pt, nr. 2 3pt
+  // Gruppe: vinder 5pt, nr. 2 3pt (eksakt — grupper er binære)
   for (const g of ['a','b','c','d','e','f','g','h','i','j','k','l']) {
     const rw = norm(results[`group_winner_${g}`] || '');
     const r2 = norm(results[`group_runner_${g}`] || '');
     const pw = norm(prediction[`group_winner_${g}`] || '');
     const p2 = norm(prediction[`group_runner_${g}`] || '');
-    if (rw && pw && rw === pw) { pts += 5; breakdown.push({ cat: `Gruppe ${g.toUpperCase()} vinder`, pts: 5 }); }
-    if (r2 && p2 && r2 === p2) { pts += 3; breakdown.push({ cat: `Gruppe ${g.toUpperCase()} nr. 2`, pts: 3 }); }
+    if (rw && pw && rw === pw) { pts += 5;  breakdown.push({ cat: `Gruppe ${g.toUpperCase()} vinder`, pts: 5 }); }
+    if (r2 && p2 && r2 === p2) { pts += 3;  breakdown.push({ cat: `Gruppe ${g.toUpperCase()} nr. 2`,  pts: 3 }); }
   }
 
-  // Øvrige kategorier
+  // Øvrige kategorier med opdaterede pointværdier
   const singles = [
-    { key: 'most_yellow_player',      label: 'Flest gule kort (spiller)', pts: 3 },
-    { key: 'most_yellow_team_overall',label: 'Flest gule kort (hold)',    pts: 3 },
-    { key: 'most_red_player',         label: 'Flest røde kort (spiller)', pts: 3 },
-    { key: 'most_red_team_overall',   label: 'Flest røde kort (hold)',    pts: 3 },
-    { key: 'most_card_pts_player',    label: 'Flest kortpoint (spiller)', pts: 3 },
-    { key: 'most_card_pts_team',      label: 'Flest kortpoint (hold)',    pts: 3 },
-    { key: 'most_mvp_player',         label: 'Flest MVP (spiller)',       pts: 3 },
-    { key: 'tournament_player',       label: 'Turneringsspiller',         pts: 5 },
-    { key: 'least_goals_conceded',    label: 'Færrest mål lukket ind',    pts: 3 },
-    { key: 'most_goals_scored',       label: 'Flest mål scoret',          pts: 3 },
+    { key: 'most_yellow_player',       label: 'Flest gule kort (spiller)',   pts: 20 },
+    { key: 'most_yellow_team_overall', label: 'Flest gule kort (hold)',       pts: 20 },
+    { key: 'most_red_player',          label: 'Flest røde kort (spiller)',    pts: 20 },
+    { key: 'most_red_team_overall',    label: 'Flest røde kort (hold)',       pts: 20 },
+    { key: 'most_card_pts_player',     label: 'Flest kortpoint (spiller)',    pts: 20 },
+    { key: 'most_card_pts_team',       label: 'Flest kortpoint (hold)',       pts: 20 },
+    { key: 'most_mvp_player',          label: 'Flest MVP (spiller)',          pts: 3  },
+    { key: 'tournament_player',        label: 'Turneringsspiller',            pts: 25 },
+    { key: 'least_goals_conceded',     label: 'Færrest mål lukket ind',       pts: 20 },
+    { key: 'most_goals_scored',        label: 'Flest mål scoret',             pts: 20 },
   ];
   for (const s of singles) {
     const rv = norm(results[s.key] || '');
@@ -69,7 +81,7 @@ export function calcTournamentPoints(prediction, results) {
   return { pts, breakdown };
 }
 
-// Dream team: 5pt pr rigtig spiller i VM holdet, 20pt for bedste spiller
+// Dream team: 5pt pr rigtig spiller, 25pt for bedste spiller
 export function calcDreamTeamPoints(prediction, results) {
   if (!prediction || !results) return { pts: 0, breakdown: [] };
   let pts = 0;
@@ -89,8 +101,8 @@ export function calcDreamTeamPoints(prediction, results) {
   const rBest = norm(results.dream_team_best_player || '');
   const pBest = norm(prediction.best_player || '');
   if (rBest && pBest && rBest === pBest) {
-    pts += 20;
-    breakdown.push({ cat: `Bedste spiller i turneringen`, pts: 20 });
+    pts += 25;
+    breakdown.push({ cat: `Bedste spiller i turneringen`, pts: 25 });
   }
 
   return { pts, breakdown };
@@ -117,7 +129,7 @@ export function calcMatchPoints(prediction, match, events) {
     if (!firstGoal) { pts += 3; breakdown.push({ cat: `Ingen målscorer (0-0)`, pts: 3 }); }
   } else if (prediction.first_scorer_player && firstGoal) {
     if (norm(firstGoal.player) === norm(prediction.first_scorer_player) &&
-        norm(firstGoal.team) === norm(prediction.first_scorer_team)) {
+        norm(firstGoal.team)   === norm(prediction.first_scorer_team)) {
       pts += 3;
       breakdown.push({ cat: `Første målscorer: ${prediction.first_scorer_player}`, pts: 3 });
     }

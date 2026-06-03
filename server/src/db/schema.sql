@@ -204,3 +204,10 @@ DO $$ BEGIN
   ALTER TABLE tournament_predictions ADD COLUMN IF NOT EXISTS most_card_pts_team VARCHAR(100);
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- Assist linked to goal event
+DO $$ BEGIN
+  ALTER TABLE match_events ADD COLUMN IF NOT EXISTS assist_player VARCHAR(100);
+  ALTER TABLE match_events ADD COLUMN IF NOT EXISTS assist_team VARCHAR(100);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;

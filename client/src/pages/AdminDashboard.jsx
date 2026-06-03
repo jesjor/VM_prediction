@@ -9,29 +9,46 @@ function fmt(iso) {
   return new Date(iso).toLocaleString('da-DK',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Copenhagen'})
 }
 
-function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove }) {
+function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove, onAddAssist }) {
   const teams = [homeTeam, awayTeam].filter(Boolean)
   const players = ev.team && squads[ev.team] ? squads[ev.team].map(p=>p.player) : []
+  const isGoal = ev.event_type === 'goal'
   return (
-    <div style={{display:'grid',gridTemplateColumns:'55px 110px 1fr 1fr 36px',gap:4,marginBottom:4,alignItems:'center'}}>
-      <input className="form-input" type="number" min="1" max="125" placeholder="Min" value={ev.minute||''} onChange={e=>onChange(index,'minute',e.target.value)} style={{padding:'6px 8px',fontSize:13}} />
-      <select className="form-select" value={ev.event_type} onChange={e=>onChange(index,'event_type',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
-        <option value="goal">⚽ Mål</option>
-        <option value="own_goal">🙈 Selvmål</option>
-        <option value="assist">🎯 Assist</option>
-        <option value="yellow">🟡 Gult</option>
-        <option value="red">🔴 Rødt</option>
-        <option value="yellow_red">🟡→🔴 Gul+Rød</option>
-      </select>
-      <select className="form-select" value={ev.team||''} onChange={e=>onChange(index,'team',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
-        <option value="">Hold</option>
-        {teams.map(t=><option key={t} value={t}>{t}</option>)}
-      </select>
-      <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
-        <option value="">Spiller</option>
-        {players.map(p=><option key={p} value={p}>{p}</option>)}
-      </select>
-      <button className="btn btn-sm btn-danger" onClick={()=>onRemove(index)} style={{padding:'4px 8px',minHeight:32}}>✕</button>
+    <div style={{marginBottom:6,background:'var(--bg3)',borderRadius:8,padding:'8px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'55px 110px 1fr 1fr 36px',gap:4,marginBottom: isGoal ? 6 : 0}}>
+        <input className="form-input" type="number" min="1" max="125" placeholder="Min" value={ev.minute||''} onChange={e=>onChange(index,'minute',e.target.value)} style={{padding:'6px 8px',fontSize:13}} />
+        <select className="form-select" value={ev.event_type} onChange={e=>onChange(index,'event_type',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
+          <option value="goal">⚽ Mål</option>
+          <option value="own_goal">🙈 Selvmål</option>
+          <option value="yellow">🟡 Gult</option>
+          <option value="red">🔴 Rødt</option>
+          <option value="yellow_red">🟡→🔴 Gul+Rød</option>
+        </select>
+        <select className="form-select" value={ev.team||''} onChange={e=>onChange(index,'team',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
+          <option value="">Hold</option>
+          {teams.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
+          <option value="">Spiller</option>
+          {players.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        <button className="btn btn-sm btn-danger" onClick={()=>onRemove(index)} style={{padding:'4px 8px',minHeight:32}}>✕</button>
+      </div>
+      {isGoal && (
+        <div style={{display:'grid',gridTemplateColumns:'55px 110px 1fr 1fr 36px',gap:4}}>
+          <div style={{fontSize:11,color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center'}}>🎯</div>
+          <div style={{fontSize:12,color:'var(--text3)',display:'flex',alignItems:'center',paddingLeft:4}}>Assist</div>
+          <select className="form-select" value={ev.assist_team||''} onChange={e=>onChange(index,'assist_team',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
+            <option value="">Hold</option>
+            {teams.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="form-select" value={ev.assist_player||''} onChange={e=>onChange(index,'assist_player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
+            <option value="">Ingen assist</option>
+            {(ev.assist_team&&squads[ev.assist_team]?squads[ev.assist_team].map(p=>p.player):[]).map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+          <div/>
+        </div>
+      )}
     </div>
   )
 }
@@ -195,8 +212,7 @@ function MatchEditor({ match, squads, onSave }) {
             </div>
             {events.map((ev,i) => (
               <EventRow key={i} ev={ev} index={i} homeTeam={home} awayTeam={away} squads={squads} onChange={updateEvent} onRemove={removeEvent} />
-            ))}
-            {events.length === 0 && <div style={{fontSize:13,color:'var(--text3)',padding:'8px 0'}}>Ingen begivenheder endnu.</div>}
+            ))}            {events.length === 0 && <div style={{fontSize:13,color:'var(--text3)',padding:'8px 0'}}>Ingen begivenheder endnu.</div>}
           </div>
 
           <button className="btn btn-gold btn-full" onClick={save} disabled={saving}>
