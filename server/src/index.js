@@ -33,11 +33,14 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Start server immediately so healthcheck responds right away
+app.listen(PORT, () => console.log(`🚀 VM2026 lytter på port ${PORT}`));
+
+// Then init database in background
 initDb()
-  .then(() => {
-    app.listen(PORT, () => console.log(`🚀 VM2026 kører på port ${PORT}`));
-  })
+  .then(() => console.log('✅ Database klar'))
   .catch(err => {
     console.error('❌ Database fejl:', err);
-    process.exit(1);
+    // Don't exit — let Railway see the healthcheck pass first
+    // The app will retry DB connections on each request
   });

@@ -53,6 +53,8 @@ export function calcTournamentPoints(prediction, results) {
     { key: 'most_yellow_team_overall',label: 'Flest gule kort (hold)',    pts: 3 },
     { key: 'most_red_player',         label: 'Flest røde kort (spiller)', pts: 3 },
     { key: 'most_red_team_overall',   label: 'Flest røde kort (hold)',    pts: 3 },
+    { key: 'most_card_pts_player',    label: 'Flest kortpoint (spiller)', pts: 3 },
+    { key: 'most_card_pts_team',      label: 'Flest kortpoint (hold)',    pts: 3 },
     { key: 'most_mvp_player',         label: 'Flest MVP (spiller)',       pts: 3 },
     { key: 'tournament_player',       label: 'Turneringsspiller',         pts: 5 },
     { key: 'least_goals_conceded',    label: 'Færrest mål lukket ind',    pts: 3 },

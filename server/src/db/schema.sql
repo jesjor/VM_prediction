@@ -196,3 +196,11 @@ DO $$ BEGIN
   ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS result_value TEXT;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- Card points predictions
+DO $$ BEGIN
+  ALTER TABLE tournament_predictions ADD COLUMN IF NOT EXISTS most_card_pts_player VARCHAR(100);
+  ALTER TABLE tournament_predictions ADD COLUMN IF NOT EXISTS most_card_pts_player_team VARCHAR(100);
+  ALTER TABLE tournament_predictions ADD COLUMN IF NOT EXISTS most_card_pts_team VARCHAR(100);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
