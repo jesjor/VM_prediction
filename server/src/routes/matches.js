@@ -222,3 +222,79 @@ router.get('/stats/standings', async (req, res) => {
     res.json(standings);
   } catch(err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
 });
+
+// GET all participants' predictions + points for a specific match (public after lock)
+router.get('/:id/participants', async (req, res) => {
+  try {
+    const match = await pool.query(`
+      SELECT m.*, COALESCE(json_agg(me ORDER BY me.minute) FILTER (WHERE me.id IS NOT NULL), '[]') as events
+      FROM matches m LEFT JOIN match_events me ON me.match_id=m.id
+      WHERE m.id=$1 GROUP BY m.id
+    `, [req.params.id]);
+    if (!match.rows.length) return res.status(404).json({ error: 'Ikke fundet' });
+    const m = match.rows[0];
+
+    // Only reveal after lock time (15 min before kickoff)
+    const lockTime = new Date(new Date(m.kickoff).getTime() - 15*60*1000);
+    if (new Date() < lockTime) return res.json({ locked: false, participants: [] });
+
+    const preds = await pool.query(`
+      SELECT mp.*, p.name
+      FROM match_predictions mp
+      JOIN participants p ON p.id=mp.participant_id
+      WHERE mp.match_id=$1
+      ORDER BY p.name
+    `, [req.params.id]);
+
+    // Calculate points per participant
+    const evs = m.events || [];
+    const firstGoal = evs.find(e => e.event_type==='goal' || e.event_type==='own_goal');
+    const actual = m.home_score !== null
+      ? m.home_score > m.away_score ? '1' : m.away_score > m.home_score ? '2' : 'X'
+      : null;
+
+    const results = preds.rows.map(pred => {
+      const breakdown = [];
+      let pts = 0;
+
+      if (actual && pred.prediction === actual) {
+        pts += 3; breakdown.push({ cat: 'Kampresultat', pts: 3, hit: true });
+      } else if (pred.prediction) {
+        breakdown.push({ cat: `Kampresultat (gættet ${pred.prediction}, blev ${actual||'?'})`, pts: 0, hit: false });
+      }
+
+      if (pred.exact_home !== null && pred.exact_home !== undefined && m.home_score !== null) {
+        if (parseInt(pred.exact_home) === m.home_score && parseInt(pred.exact_away) === m.away_score) {
+          pts += 3; breakdown.push({ cat: `Eksakt score ${m.home_score}-${m.away_score}`, pts: 3, hit: true });
+        } else {
+          breakdown.push({ cat: `Eksakt score (gættet ${pred.exact_home}-${pred.exact_away})`, pts: 0, hit: false });
+        }
+      }
+
+      if (pred.first_scorer_team === 'ingen') {
+        if (!firstGoal) { pts += 3; breakdown.push({ cat: 'Ingen mål (0-0)', pts: 3, hit: true }); }
+        else breakdown.push({ cat: 'Ingen mål (der var mål)', pts: 0, hit: false });
+      } else if (pred.first_scorer_player) {
+        const hit = firstGoal &&
+          firstGoal.player?.toLowerCase() === pred.first_scorer_player?.toLowerCase() &&
+          firstGoal.team?.toLowerCase() === pred.first_scorer_team?.toLowerCase();
+        if (hit) { pts += 3; breakdown.push({ cat: `Første målscorer: ${pred.first_scorer_player}`, pts: 3, hit: true }); }
+        else breakdown.push({ cat: `Scorer: gættet ${pred.first_scorer_player}, var ${firstGoal?.player||'ingen'}`, pts: 0, hit: false });
+      }
+
+      if (pred.match_mvp_player) {
+        const hit = m.match_mvp_player && m.match_mvp_player.toLowerCase() === pred.match_mvp_player.toLowerCase();
+        if (hit) { pts += 3; breakdown.push({ cat: `MVP: ${pred.match_mvp_player}`, pts: 3, hit: true }); }
+        else breakdown.push({ cat: `MVP: gættet ${pred.match_mvp_player}, var ${m.match_mvp_player||'ikke sat'}`, pts: 0, hit: false });
+      }
+
+      return { name: pred.name, participant_id: pred.participant_id, prediction: pred.prediction,
+               exact_home: pred.exact_home, exact_away: pred.exact_away,
+               first_scorer_player: pred.first_scorer_player, first_scorer_team: pred.first_scorer_team,
+               match_mvp_player: pred.match_mvp_player, pts, breakdown };
+    });
+
+    results.sort((a,b) => b.pts - a.pts);
+    res.json({ locked: true, match: m, participants: results });
+  } catch(err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
+});

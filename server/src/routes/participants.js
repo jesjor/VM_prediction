@@ -249,3 +249,87 @@ router.get('/guess-counts/match/:matchId', async (req, res) => {
     res.json(counts);
   } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
+
+// GET activity feed (recent results with participant points)
+router.get('/feed/activity', async (req, res) => {
+  try {
+    const recentMatches = await pool.query(`
+      SELECT m.id, m.home_team, m.away_team, m.home_score, m.away_score,
+             m.kickoff, m.round, m.group_name, m.status,
+             COALESCE(json_agg(me ORDER BY me.minute) FILTER (WHERE me.id IS NOT NULL), '[]') as events
+      FROM matches m LEFT JOIN match_events me ON me.match_id=m.id
+      WHERE m.status='finished'
+      GROUP BY m.id ORDER BY m.kickoff DESC LIMIT 8
+    `);
+
+    const feed = [];
+    for (const m of recentMatches.rows) {
+      const preds = await pool.query(`
+        SELECT mp.*, p.name FROM match_predictions mp
+        JOIN participants p ON p.id=mp.participant_id
+        WHERE mp.match_id=$1
+      `, [m.id]);
+
+      const actual = m.home_score > m.away_score ? '1' : m.away_score > m.home_score ? '2' : 'X';
+      const evs = m.events || [];
+      const firstGoal = evs.find(e => e.event_type==='goal'||e.event_type==='own_goal');
+
+      const participantResults = preds.rows.map(pred => {
+        let pts = 0;
+        if (pred.prediction === actual) pts += 3;
+        if (pred.exact_home!==null && parseInt(pred.exact_home)===m.home_score && parseInt(pred.exact_away)===m.away_score) pts += 3;
+        if (pred.first_scorer_team==='ingen' && !firstGoal) pts += 3;
+        else if (pred.first_scorer_player && firstGoal &&
+          firstGoal.player?.toLowerCase()===pred.first_scorer_player?.toLowerCase()) pts += 3;
+        if (pred.match_mvp_player && m.match_mvp_player?.toLowerCase()===pred.match_mvp_player?.toLowerCase()) pts += 3;
+        return { name: pred.name, pts };
+      }).sort((a,b) => b.pts - a.pts);
+
+      feed.push({
+        matchId: m.id,
+        home: m.home_team, away: m.away_team,
+        score: `${m.home_score}-${m.away_score}`,
+        kickoff: m.kickoff,
+        round: m.round, group: m.group_name,
+        topScorer: evs.filter(e=>e.event_type==='goal').reduce((acc,e)=>{
+          acc[e.player]=(acc[e.player]||0)+1; return acc;
+        },{}),
+        participants: participantResults,
+        maxPts: Math.max(0, ...participantResults.map(p=>p.pts)),
+      });
+    }
+    res.json(feed);
+  } catch(err) { console.error(err); res.status(500).json({error:'Serverfejl'}); }
+});
+
+// GET streak for a participant
+router.get('/:id/streak', async (req, res) => {
+  try {
+    const preds = await pool.query(`
+      SELECT mp.*, m.home_score, m.away_score, m.status, m.kickoff,
+             m.home_team, m.away_team, m.match_mvp_player,
+             COALESCE(json_agg(me ORDER BY me.minute) FILTER (WHERE me.id IS NOT NULL), '[]') as events
+      FROM match_predictions mp
+      JOIN matches m ON m.id=mp.match_id
+      LEFT JOIN match_events me ON me.match_id=m.id
+      WHERE mp.participant_id=$1 AND m.status='finished'
+      GROUP BY mp.id, m.id
+      ORDER BY m.kickoff DESC
+    `, [req.params.id]);
+
+    let streak = 0;
+    for (const pred of preds.rows) {
+      const actual = pred.home_score > pred.away_score ? '1' : pred.away_score > pred.home_score ? '2' : 'X';
+      const evs = pred.events || [];
+      const firstGoal = evs.find(e=>e.event_type==='goal'||e.event_type==='own_goal');
+      let pts = 0;
+      if (pred.prediction===actual) pts+=3;
+      if (pred.exact_home!==null && parseInt(pred.exact_home)===pred.home_score && parseInt(pred.exact_away)===pred.away_score) pts+=3;
+      if (pred.first_scorer_team==='ingen'&&!firstGoal) pts+=3;
+      else if (pred.first_scorer_player&&firstGoal&&firstGoal.player?.toLowerCase()===pred.first_scorer_player?.toLowerCase()) pts+=3;
+      if (pred.match_mvp_player&&pred.match_mvp_player?.toLowerCase()===pred.match_mvp_player?.toLowerCase()) pts+=3;
+      if (pts > 0) streak++; else break;
+    }
+    res.json({ streak });
+  } catch(err) { res.status(500).json({error:'Serverfejl'}); }
+});

@@ -325,24 +325,33 @@ export default function Predict() {
   const [saveMsg, setSaveMsg] = useState('')
 
   const [ranking, setRanking] = useState(null)
+  const [streak, setStreak] = useState(0)
 
   useEffect(() => {
     api.get('/squads').then(r=>setSquads(r.data)).catch(()=>{})
     api.get('/matches').then(r=>setMatches(r.data)).catch(()=>{})
+    // Restore session
+    const saved = localStorage.getItem('vm2026_participant')
+    if (saved && step === 'login') {
+      try {
+        const { participant: p, pin: savedPin } = JSON.parse(saved)
+        setParticipant(p); setPin(savedPin); setStep('predict')
+        loadPredictions(p.id, savedPin)
+      } catch {}
+    }
   }, [])
 
-  // Load ranking when participant is known
   useEffect(() => {
     if (!participant) return
     api.get('/participants').then(r => {
       const sorted = r.data
       const idx = sorted.findIndex(p => p.id === participant.id)
       if (idx !== -1) {
-        const me = sorted[idx]
-        const leader = sorted[0]
+        const me = sorted[idx], leader = sorted[0]
         setRanking({ rank: idx+1, total: sorted.length, pts: me.total_pts, gap: leader.total_pts - me.total_pts, leaderName: leader.name })
       }
     }).catch(()=>{})
+    api.get(`/participants/${participant.id}/streak`).then(r => setStreak(r.data.streak)).catch(()=>{})
   }, [participant])
 
   async function login() {
@@ -350,6 +359,7 @@ export default function Predict() {
     try {
       const r = await api.post('/participants/verify',{name:name.trim(),pin})
       setParticipant(r.data); setStep('predict')
+      localStorage.setItem('vm2026_participant', JSON.stringify({participant:r.data, pin}))
       loadPredictions(r.data.id,pin)
     } catch { setMsg('Forkert navn eller PIN.') }
   }
@@ -359,6 +369,7 @@ export default function Predict() {
     try {
       const r = await api.post('/participants',{name:name.trim(),pin:newPin})
       setParticipant(r.data); setPin(newPin); setStep('predict')
+      localStorage.setItem('vm2026_participant', JSON.stringify({participant:r.data, pin:newPin}))
     } catch(e) { setMsg(e.response?.data?.error||'Fejl') }
   }
 
@@ -430,7 +441,7 @@ export default function Predict() {
             <div style={{fontSize:13,fontWeight:600}}>
               {ranking.rank===1?'🏆 Du fører — godt gættet!':`${ranking.gap} pt fra førstepladsen (${ranking.leaderName})`}
             </div>
-            <div style={{fontSize:12,color:'var(--text3)'}}>{ranking.pts} pt · {ranking.rank} af {ranking.total} deltagere</div>
+            <div style={{fontSize:12,color:'var(--text3)'}}>{ranking.pts} pt · {ranking.rank} af {ranking.total} deltagere{streak>=2?` · 🔥 ${streak} kampe i træk`:''}</div>
           </div>
           <a href="/" style={{fontSize:13,color:'var(--blue)',textDecoration:'none',flexShrink:0}}>Se alle →</a>
         </div>
