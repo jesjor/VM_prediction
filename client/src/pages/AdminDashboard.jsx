@@ -9,10 +9,13 @@ function fmt(iso) {
   return new Date(iso).toLocaleString('da-DK',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Copenhagen'})
 }
 
-function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove, onAddAssist }) {
+function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove }) {
   const teams = [homeTeam, awayTeam].filter(Boolean)
   const players = ev.team && squads[ev.team] ? squads[ev.team].map(p=>p.player) : []
   const isGoal = ev.event_type === 'goal'
+  // Assist players = same team as scorer
+  const assistPlayers = ev.team && squads[ev.team] ? squads[ev.team].map(p=>p.player) : []
+
   return (
     <div style={{marginBottom:6,background:'var(--bg3)',borderRadius:8,padding:'8px'}}>
       <div style={{display:'grid',gridTemplateColumns:'55px 110px 1fr 1fr 36px',gap:4,marginBottom: isGoal ? 6 : 0}}>
@@ -35,18 +38,12 @@ function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove, o
         <button className="btn btn-sm btn-danger" onClick={()=>onRemove(index)} style={{padding:'4px 8px',minHeight:32}}>✕</button>
       </div>
       {isGoal && (
-        <div style={{display:'grid',gridTemplateColumns:'55px 110px 1fr 1fr 36px',gap:4}}>
-          <div style={{fontSize:11,color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center'}}>🎯</div>
-          <div style={{fontSize:12,color:'var(--text3)',display:'flex',alignItems:'center',paddingLeft:4}}>Assist</div>
-          <select className="form-select" value={ev.assist_team||''} onChange={e=>onChange(index,'assist_team',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
-            <option value="">Hold</option>
-            {teams.map(t=><option key={t} value={t}>{t}</option>)}
-          </select>
+        <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:6,alignItems:'center'}}>
+          <div style={{fontSize:12,color:'var(--text3)',paddingLeft:4,whiteSpace:'nowrap'}}>🎯 Assist ({ev.team||'—'}):</div>
           <select className="form-select" value={ev.assist_player||''} onChange={e=>onChange(index,'assist_player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
             <option value="">Ingen assist</option>
-            {(ev.assist_team&&squads[ev.assist_team]?squads[ev.assist_team].map(p=>p.player):[]).map(p=><option key={p} value={p}>{p}</option>)}
+            {assistPlayers.filter(p=>p!==ev.player).map(p=><option key={p} value={p}>{p}</option>)}
           </select>
-          <div/>
         </div>
       )}
     </div>

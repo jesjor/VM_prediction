@@ -134,13 +134,20 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
       </div>
 
       {locked
-        ? existing && (
-          <div style={{fontSize:13,color:'var(--text2)'}}>
-            Gæt: <strong style={{color:'var(--text)'}}>{existing.prediction}</strong>
-            {existing.first_scorer_player && <> · Scorer: <strong>{existing.first_scorer_player}</strong></>}
-            {existing.match_mvp_player && <> · MVP: <strong>{existing.match_mvp_player}</strong></>}
+        ? <div style={{background:'var(--bg3)',borderRadius:8,padding:'10px 12px'}}>
+            <div style={{fontSize:13,fontWeight:600,color:existing?'var(--green)':'var(--text3)',marginBottom:existing?6:0}}>
+              {existing ? '🔒 Gæt låst og gemt' : '🔒 Intet gæt — kampen er låst'}
+            </div>
+            {existing && (
+              <div style={{display:'flex',gap:12,flexWrap:'wrap',fontSize:13}}>
+                <span>Resultat: <strong style={{color:'var(--gold)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:18}}>{existing.prediction}</strong></span>
+                {existing.exact_home!==null&&existing.exact_home!==undefined && <span>Score: <strong>{existing.exact_home}-{existing.exact_away}</strong></span>}
+                {existing.first_scorer_player && <span>⚽ <strong>{existing.first_scorer_player}</strong></span>}
+                {existing.first_scorer_team==='ingen' && <span>⚽ <strong>Ingen mål</strong></span>}
+                {existing.match_mvp_player && <span>🌟 <strong>{existing.match_mvp_player}</strong></span>}
+              </div>
+            )}
           </div>
-        )
         : <>
             <div className="result-picker">
               {[['1',homeTeam],['X','Uafgjort'],['2',awayTeam]].map(([v,label])=>(

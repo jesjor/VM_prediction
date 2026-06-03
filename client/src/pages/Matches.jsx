@@ -1,65 +1,148 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
 
-const ROUND_LABELS = {
-  GROUP: 'Gruppespil', R32: 'Runde af 32', R16: 'Runde af 16',
-  QF: 'Kvartfinale', SF: 'Semifinale', '3RD': '3. plads', FINAL: 'FINALE'
-}
+const ROUND_LABELS = { GROUP:'Gruppespil', R32:'Runde af 32', R16:'Runde af 16', QF:'Kvartfinale', SF:'Semifinale', '3RD':'3. plads', FINAL:'FINALE' }
 const GROUP_ORDER = ['A','B','C','D','E','F','G','H','I','J','K','L']
 
-function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString('da-DK', {
-    weekday:'short', month:'short', day:'numeric',
-    hour:'2-digit', minute:'2-digit', timeZone:'Europe/Copenhagen'
-  }) + ' DK-tid'
+function useCountdown(kickoff) {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    const lockTime = new Date(new Date(kickoff).getTime() - 15*60*1000)
+    function update() {
+      const diff = lockTime - new Date()
+      if (diff <= 0) { setText('Låst'); return }
+      const h = Math.floor(diff/3600000)
+      const m = Math.floor((diff%3600000)/60000)
+      const s = Math.floor((diff%60000)/1000)
+      if (h > 48) setText(`${Math.floor(h/24)}d`)
+      else if (h > 0) setText(`${h}t ${m}m`)
+      else if (m > 0) setText(`${m}m ${s}s`)
+      else setText(`${s}s`)
+    }
+    update()
+    const t = setInterval(update, 1000)
+    return () => clearInterval(t)
+  }, [kickoff])
+  return text
 }
 
-function MatchCard({ match }) {
+function fmt(iso) {
+  return new Date(iso).toLocaleString('da-DK',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Copenhagen'})
+}
+
+function MatchCard({ match, participant }) {
   const [open, setOpen] = useState(false)
-  const home = match.home_team || match.home_slot || '?'
-  const away = match.away_team || match.away_slot || '?'
+  const [guessCounts, setGuessCounts] = useState(null)
+  const countdown = useCountdown(match.kickoff)
+  const navigate = useNavigate()
   const finished = match.status === 'finished'
   const live = match.status === 'live'
+  const locked = new Date() > new Date(new Date(match.kickoff).getTime() - 15*60*1000)
+  const home = match.home_team || match.home_slot || '?'
+  const away = match.away_team || match.away_slot || '?'
+
+  function handleOpen() {
+    setOpen(o => !o)
+    if (!guessCounts && match.home_team) {
+      api.get(`/participants/guess-counts/match/${match.id}`).then(r => setGuessCounts(r.data)).catch(()=>{})
+    }
+  }
 
   return (
-    <div className={`match-card${finished?' finished':live?' live':''}`} onClick={()=>setOpen(o=>!o)}>
-      <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-        <div className="match-teams" style={{flex:1}}>
-          <span>{home}</span>
-          {finished || live
-            ? <span className="match-score">{match.home_score ?? '–'} - {match.away_score ?? '–'}</span>
-            : <span style={{color:'var(--text3)',fontSize:'14px'}}>vs</span>
-          }
-          <span>{away}</span>
+    <div className={`match-card${finished?' finished':live?' live':''}`} style={{marginBottom:8}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}} onClick={handleOpen}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            {match.group_name && <span className="badge badge-gray" style={{flexShrink:0}}>Gr.{match.group_name}</span>}
+            {!match.group_name && <span className="badge badge-blue" style={{flexShrink:0}}>{ROUND_LABELS[match.round]||match.round}</span>}
+            <span style={{fontWeight:600,fontSize:14}}>{home}</span>
+            {finished || live
+              ? <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:'var(--gold)'}}>{match.home_score}-{match.away_score}</span>
+              : <span style={{color:'var(--text3)',fontSize:13}}>vs</span>
+            }
+            <span style={{fontWeight:600,fontSize:14}}>{away}</span>
+            {live && <span className="badge badge-red">LIVE</span>}
+            {finished && <span className="badge badge-green">Slut</span>}
+          </div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:3}}>
+            📍 {match.stadium_name}, {match.stadium_city}
+            {match.stadium_capacity && <> · {match.stadium_capacity.toLocaleString()} pladser</>}
+          </div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:1}}>🕐 {fmt(match.kickoff)}</div>
         </div>
-        {match.group_name && <span className="badge badge-gray">Gruppe {match.group_name}</span>}
-        {live && <span className="badge badge-red">LIVE</span>}
-        {finished && <span className="badge badge-green">Slut</span>}
-      </div>
-      <div className="match-meta">
-        📍 {match.stadium_name} · {match.stadium_city} · {formatTime(match.kickoff)}
-        {match.stadium_capacity && <> · {match.stadium_capacity.toLocaleString()} pladser</>}
+        {!finished && !live && match.home_team && (
+          <div style={{textAlign:'center',flexShrink:0}}>
+            <div style={{fontSize:locked?11:13,fontWeight:600,color:locked?'var(--text3)':countdown.includes('s')&&!countdown.includes('m')?'var(--red)':'var(--text2)'}}>
+              {locked ? '🔒 Låst' : `⏳ ${countdown}`}
+            </div>
+            {!locked && <div style={{fontSize:10,color:'var(--text3)'}}>til lås</div>}
+          </div>
+        )}
       </div>
 
-      {open && match.events && match.events.length > 0 && (
-        <div style={{marginTop:'10px',borderTop:'1px solid var(--border)',paddingTop:'10px'}}>
-          {match.events.map((e,i) => (
-            <div key={i} style={{fontSize:'13px',color:'var(--text2)',display:'flex',gap:'8px',marginBottom:'3px'}}>
-              <span style={{color:'var(--text3)',minWidth:'30px'}}>{e.minute}'</span>
-              <span>
-                {e.event_type==='goal' && '⚽'}
-                {e.event_type==='own_goal' && '🙈'}
-                {e.event_type==='assist' && '🎯'}
-                {e.event_type==='yellow' && '🟡'}
-                {e.event_type==='red' && '🔴'}
-                {e.event_type==='yellow_red' && '🟡🔴'}
-              </span>
-              <span>{e.player}</span>
-              <span style={{color:'var(--text3)'}}>({e.team})</span>
+      {open && (
+        <div style={{marginTop:10,borderTop:'1px solid var(--border)',paddingTop:10}}>
+          {/* Guess distribution */}
+          {match.home_team && (
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:12,color:'var(--text3)',marginBottom:5,fontWeight:600,letterSpacing:'0.5px',textTransform:'uppercase'}}>Hvad gætter folk?</div>
+              {guessCounts && guessCounts.total > 0 ? (
+                <div style={{display:'flex',gap:6}}>
+                  {[['1',home,'var(--blue)'],['X','Uafgjort','var(--text3)'],['2',away,'var(--green)']].map(([v,label,color])=>{
+                    const count = guessCounts[v]||0
+                    const pct = guessCounts.total>0 ? Math.round((count/guessCounts.total)*100) : 0
+                    return (
+                      <div key={v} style={{flex:1,background:'var(--bg3)',borderRadius:8,padding:'8px 6px',textAlign:'center'}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color}}>{v}</div>
+                        <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>{label}</div>
+                        <div style={{background:'var(--border)',borderRadius:4,height:4,overflow:'hidden'}}>
+                          <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width .3s'}}/>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:600,marginTop:3,color:'var(--text2)'}}>{pct}%</div>
+                        <div style={{fontSize:10,color:'var(--text3)'}}>{count} gæt</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : guessCounts ? (
+                <p style={{fontSize:13,color:'var(--text3)'}}>Ingen gæt endnu.</p>
+              ) : (
+                <p style={{fontSize:13,color:'var(--text3)'}}>Henter...</p>
+              )}
             </div>
-          ))}
+          )}
+
+          {/* Events */}
+          {finished && match.events?.length > 0 && (
+            <div>
+              <div style={{fontSize:12,color:'var(--text3)',marginBottom:5,fontWeight:600,letterSpacing:'0.5px',textTransform:'uppercase'}}>Begivenheder</div>
+              {match.events.map((e,i)=>(
+                <div key={i} style={{display:'flex',gap:8,fontSize:13,color:'var(--text2)',padding:'3px 0',borderBottom:'1px solid var(--border)'}}>
+                  <span style={{color:'var(--text3)',minWidth:28,flexShrink:0}}>{e.minute}'</span>
+                  <span style={{flexShrink:0}}>
+                    {e.event_type==='goal'&&'⚽'}{e.event_type==='own_goal'&&'🙈'}
+                    {e.event_type==='yellow'&&'🟡'}{e.event_type==='red'&&'🔴'}{e.event_type==='yellow_red'&&'🟡🔴'}
+                  </span>
+                  <span>{e.player} <span style={{color:'var(--text3)'}}>({e.team})</span>
+                    {e.assist_player && <span style={{color:'var(--text3)'}}> · 🎯 {e.assist_player}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* CTA to predict */}
+          {!locked && match.home_team && participant && (
+            <button className="btn btn-primary btn-sm" style={{marginTop:10}} onClick={()=>navigate('/gaet')}>
+              ⚽ Afgiv gæt på denne kamp
+            </button>
+          )}
+          {!locked && match.home_team && !participant && (
+            <button className="btn btn-gold btn-sm" style={{marginTop:10}} onClick={()=>navigate('/gaet')}>
+              Log ind for at gætte
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -69,81 +152,47 @@ function MatchCard({ match }) {
 export default function Matches() {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState('upcoming')
+  const participant = null // could read from localStorage if needed
 
   useEffect(() => {
-    api.get('/matches').then(r => {
-      setMatches(r.data)
-      setLoading(false)
-    }).catch(() => setLoading(false))
+    api.get('/matches').then(r=>{setMatches(r.data);setLoading(false)}).catch(()=>setLoading(false))
   }, [])
 
   if (loading) return <div className="spinner">Henter kampprogram...</div>
 
-  const grouped = {}
-  for (const m of matches) {
-    const key = m.round === 'GROUP' ? `GROUP_${m.group_name}` : m.round
-    if (!grouped[key]) grouped[key] = []
-    grouped[key].push(m)
-  }
-
   const now = new Date()
-  const upcoming = matches.filter(m => new Date(m.kickoff) > now && m.status !== 'finished')
-  const finished = matches.filter(m => m.status === 'finished')
+  let display = matches
+  if (filter==='upcoming') display = matches.filter(m=>new Date(m.kickoff)>now&&m.status!=='finished').slice(0,30)
+  else if (filter==='finished') display = matches.filter(m=>m.status==='finished').reverse()
+  else if (filter==='live') display = matches.filter(m=>m.status==='live')
+  else if (filter==='group') display = matches.filter(m=>m.round==='GROUP')
+  else if (filter==='knockout') display = matches.filter(m=>m.round!=='GROUP')
 
-  let displayMatches = matches
-  if (filter === 'upcoming') displayMatches = upcoming.slice(0, 20)
-  else if (filter === 'finished') displayMatches = finished.slice(-20).reverse()
-
-  // Group display matches
-  const displayGrouped = {}
-  for (const m of displayMatches) {
-    const key = m.round === 'GROUP' ? `GROUP_${m.group_name}` : m.round
-    if (!displayGrouped[key]) displayGrouped[key] = []
-    displayGrouped[key].push(m)
-  }
-
-  const sortedKeys = Object.keys(displayGrouped).sort((a, b) => {
-    if (a.startsWith('GROUP_') && b.startsWith('GROUP_')) {
-      return GROUP_ORDER.indexOf(a.slice(6)) - GROUP_ORDER.indexOf(b.slice(6))
-    }
-    const order = ['GROUP','R32','R16','QF','SF','3RD','FINAL']
-    const ra = a.startsWith('GROUP_') ? 'GROUP' : a
-    const rb = b.startsWith('GROUP_') ? 'GROUP' : b
-    return order.indexOf(ra) - order.indexOf(rb)
-  })
+  const finished = matches.filter(m=>m.status==='finished').length
+  const upcoming = matches.filter(m=>new Date(m.kickoff)>now&&m.status!=='finished').length
 
   return (
     <div>
-      <div className="page-header">
+      <div style={{padding:'1.25rem 0 1rem'}}>
         <div className="page-title">📅 Kampprogrammet</div>
         <div className="page-sub">Alle 104 kampe · VM 2026 · USA, Mexico & Canada</div>
       </div>
 
-      <div style={{display:'flex',gap:'8px',marginBottom:'1rem',flexWrap:'wrap'}}>
-        <div style={{fontSize:'13px',color:'var(--text2)',display:'flex',alignItems:'center',gap:'4px'}}>
-          <span className="badge badge-green">{finished.length}</span> spillet
-          <span className="badge badge-gray" style={{marginLeft:'4px'}}>{upcoming.length}</span> kommende
-        </div>
-        <div style={{marginLeft:'auto',display:'flex',gap:'4px'}}>
-          {[['all','Alle'],['upcoming','Kommende'],['finished','Spillet']].map(([v,l]) => (
-            <button key={v} className={`btn btn-sm${filter===v?' btn-primary':''}`} onClick={()=>setFilter(v)}>{l}</button>
-          ))}
-        </div>
+      <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center',flexWrap:'wrap'}}>
+        <span className="badge badge-green">{finished} spillet</span>
+        <span className="badge badge-gray">{upcoming} kommende</span>
+        {matches.filter(m=>m.status==='live').length>0 && <span className="badge badge-red">🔴 {matches.filter(m=>m.status==='live').length} live</span>}
       </div>
 
-      {sortedKeys.map(key => {
-        const grp = displayGrouped[key]
-        const isGroup = key.startsWith('GROUP_')
-        const round = isGroup ? 'GROUP' : key
-        const label = isGroup ? `Gruppe ${key.slice(6)}` : ROUND_LABELS[round] || round
-        return (
-          <div key={key} style={{marginBottom:'1rem'}}>
-            <div className="section-title">{label}</div>
-            {grp.map(m => <MatchCard key={m.id} match={m} />)}
-          </div>
-        )
-      })}
+      <div style={{display:'flex',gap:4,marginBottom:12,flexWrap:'wrap'}}>
+        {[['upcoming','Kommende'],['live','Live'],['finished','Spillet'],['group','Gruppe'],['knockout','Knockout'],['all','Alle']].map(([v,l])=>(
+          <button key={v} className={`btn btn-sm${filter===v?' btn-primary':''}`} onClick={()=>setFilter(v)}>{l}</button>
+        ))}
+      </div>
+
+      {display.length===0 && <div className="empty">Ingen kampe i denne visning.</div>}
+      {display.map(m=><MatchCard key={m.id} match={m} participant={participant} />)}
     </div>
   )
 }

@@ -218,3 +218,6 @@ DO $$ BEGIN
   ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS exact_away INTEGER;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- Guess counts (cached for performance)
+-- We'll compute these on-the-fly from queries

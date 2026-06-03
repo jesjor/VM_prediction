@@ -205,3 +205,47 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 });
 
 export default router;
+
+// GET guess distribution (how many people guessed what, without revealing who)
+router.get('/guess-counts/tournament', async (req, res) => {
+  try {
+    const tp = await pool.query('SELECT * FROM tournament_predictions');
+    const counts = {
+      topscorer: {}, assist: {}, country: {},
+      group_winner: {}, tournament_player: {}, least_goals: {}, most_goals: {},
+      most_mvp: {}, yellow_player: {}, red_player: {}, card_pts_player: {}
+    };
+    for (const p of tp.rows) {
+      [1,2,3].forEach(i => {
+        const ts = p[`topscorer_${i}_player`];
+        if (ts) counts.topscorer[ts] = (counts.topscorer[ts]||0)+1;
+        const as = p[`assist_${i}_player`];
+        if (as) counts.assist[as] = (counts.assist[as]||0)+1;
+        const co = p[`country_${i}`];
+        if (co) counts.country[co] = (counts.country[co]||0)+1;
+      });
+      ['a','b','c','d','e','f','g','h','i','j','k','l'].forEach(g => {
+        const gw = p[`group_winner_${g}`];
+        if (gw) counts.group_winner[gw] = (counts.group_winner[gw]||0)+1;
+      });
+      if (p.tournament_player) counts.tournament_player[p.tournament_player] = (counts.tournament_player[p.tournament_player]||0)+1;
+      if (p.least_goals_conceded) counts.least_goals[p.least_goals_conceded] = (counts.least_goals[p.least_goals_conceded]||0)+1;
+      if (p.most_goals_scored) counts.most_goals[p.most_goals_scored] = (counts.most_goals[p.most_goals_scored]||0)+1;
+      if (p.most_mvp_player) counts.most_mvp[p.most_mvp_player] = (counts.most_mvp[p.most_mvp_player]||0)+1;
+      if (p.most_yellow_player) counts.yellow_player[p.most_yellow_player] = (counts.yellow_player[p.most_yellow_player]||0)+1;
+      if (p.most_red_player) counts.red_player[p.most_red_player] = (counts.red_player[p.most_red_player]||0)+1;
+      if (p.most_card_pts_player) counts.card_pts_player[p.most_card_pts_player] = (counts.card_pts_player[p.most_card_pts_player]||0)+1;
+    }
+    res.json({ total: tp.rows.length, counts });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// GET match guess counts
+router.get('/guess-counts/match/:matchId', async (req, res) => {
+  try {
+    const mp = await pool.query('SELECT prediction, COUNT(*) as count FROM match_predictions WHERE match_id=$1 GROUP BY prediction', [req.params.matchId]);
+    const counts = { '1': 0, 'X': 0, '2': 0, total: 0 };
+    for (const r of mp.rows) { counts[r.prediction] = parseInt(r.count); counts.total += parseInt(r.count); }
+    res.json(counts);
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
