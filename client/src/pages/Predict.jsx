@@ -82,6 +82,8 @@ function GroupPickers({ data, onChange }) {
 
 function MatchPredictCard({ match, participantId, pin, existing, squads }) {
   const [pred, setPred] = useState(existing?.prediction||'')
+  const [exactHome, setExactHome] = useState(existing?.exact_home??'')
+  const [exactAway, setExactAway] = useState(existing?.exact_away??'')
   const [scorerTeam, setScorerTeam] = useState(existing?.first_scorer_team||'')
   const [scorerPlayer, setScorerPlayer] = useState(existing?.first_scorer_player||'')
   const [mvpTeam, setMvpTeam] = useState(existing?.match_mvp_team||'')
@@ -109,6 +111,8 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
         pin, prediction: pred,
         first_scorer_team: scorerTeam||null, first_scorer_player: scorerPlayer||null,
         match_mvp_team: mvpTeam||null, match_mvp_player: mvpPlayer||null,
+        exact_home: exactHome!==''?parseInt(exactHome):null,
+        exact_away: exactAway!==''?parseInt(exactAway):null,
       })
       setMsg('✅ Gemt!')
       setTimeout(()=>setMsg(''),3000)
@@ -145,6 +149,16 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
                   <span className="result-team">{label}</span>
                 </button>
               ))}
+            </div>
+
+            <div className="form-group">
+              <div className="form-label">🎯 Eksakt score · +3 pt bonus</div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <input className="form-input" type="number" min="0" max="20" value={exactHome} onChange={e=>setExactHome(e.target.value)} placeholder="0" style={{width:64,textAlign:'center',fontSize:18,fontWeight:700}} />
+                <span style={{fontSize:18,color:'var(--text3)',fontWeight:700}}>-</span>
+                <input className="form-input" type="number" min="0" max="20" value={exactAway} onChange={e=>setExactAway(e.target.value)} placeholder="0" style={{width:64,textAlign:'center',fontSize:18,fontWeight:700}} />
+                <span style={{fontSize:12,color:'var(--text3)'}}>({homeTeam} - {awayTeam})</span>
+              </div>
             </div>
 
             <div className="form-group">

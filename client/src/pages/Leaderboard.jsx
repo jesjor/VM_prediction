@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
 
 const COLORS = ['#3b82f6','#8b5cf6','#10b981','#f97316','#ec4899','#06b6d4','#84cc16','#f59e0b']
@@ -17,6 +18,8 @@ export default function Leaderboard() {
     return () => clearInterval(t)
   }, [])
 
+  const navigate = useNavigate()
+
   if (loading) return <div className="spinner">⚽ Henter leaderboard...</div>
 
   return (
@@ -31,10 +34,10 @@ export default function Leaderboard() {
         : <div className="card" style={{padding:'0 1rem'}}>
             {data.map((p, i) => (
               <div key={p.id}>
-                <div className="lb-row" style={{cursor:'pointer'}} onClick={()=>setExpanded(expanded===p.id?null:p.id)}>
+                <div className="lb-row" style={{cursor:'pointer'}} onClick={()=> expanded===p.id ? setExpanded(null) : setExpanded(p.id)}>
                   <div className={`lb-rank${i<3?` r${i+1}`:''}`}>{i<3 ? RANK_ICONS[i] : i+1}</div>
                   <div className="lb-avatar" style={{background:getColor(p.name)}}>{initials(p.name)}</div>
-                  <div className="lb-name">{p.name}</div>
+                  <div className="lb-name" style={{cursor:'pointer'}} onClick={e=>{e.stopPropagation();navigate(`/profil/${p.id}`)}}>{p.name} <span style={{fontSize:11,color:'var(--text3)'}}>→</span></div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2}}>
                     <div className="lb-pts-big">{p.total_pts}</div>
                     <div className="lb-pts-label">point</div>

@@ -145,6 +145,75 @@ router.patch('/:id/result', requireAdmin, async (req, res) => {
   }
 });
 
+// GET comprehensive tournament stats
+router.get('/stats/tournament', async (req, res) => {
+  try {
+    const events = await pool.query(`
+      SELECT me.*, m.home_team, m.away_team, m.kickoff
+      FROM match_events me
+      JOIN matches m ON m.id = me.match_id
+      WHERE m.status = 'finished'
+      ORDER BY me.match_id, me.minute
+    `);
+
+    const ev = events.rows;
+
+    // Goals per player
+    const goalMap = {}, assistMap = {}, yellowMap = {}, redMap = {};
+    const teamGoals = {}, teamConceded = {};
+
+    for (const e of ev) {
+      const key = `${e.player}|||${e.team}`;
+      if (e.event_type === 'goal') {
+        goalMap[key] = (goalMap[key] || { player: e.player, team: e.team, count: 0 });
+        goalMap[key].count++;
+        // team goals
+        teamGoals[e.team] = (teamGoals[e.team] || 0) + 1;
+        // opponent conceded
+        const opp = e.team === e.home_team ? e.away_team : e.home_team;
+        teamConceded[opp] = (teamConceded[opp] || 0) + 1;
+      }
+      if (e.event_type === 'own_goal') {
+        const opp = e.team === e.home_team ? e.away_team : e.home_team;
+        teamGoals[opp] = (teamGoals[opp] || 0) + 1;
+        teamConceded[e.team] = (teamConceded[e.team] || 0) + 1;
+      }
+      if (e.event_type === 'assist' || (e.event_type === 'goal' && e.assist_player)) {
+        const ak = e.event_type === 'goal'
+          ? `${e.assist_player}|||${e.assist_team}`
+          : key;
+        if (e.event_type === 'goal' && e.assist_player) {
+          assistMap[ak] = assistMap[ak] || { player: e.assist_player, team: e.assist_team, count: 0 };
+          assistMap[ak].count++;
+        }
+      }
+      if (e.event_type === 'yellow') {
+        yellowMap[key] = yellowMap[key] || { player: e.player, team: e.team, count: 0 };
+        yellowMap[key].count++;
+      }
+      if (e.event_type === 'red' || e.event_type === 'yellow_red') {
+        redMap[key] = redMap[key] || { player: e.player, team: e.team, count: 0 };
+        redMap[key].count++;
+      }
+    }
+
+    const sort = obj => Object.values(obj).sort((a,b) => b.count - a.count);
+    const sortTeam = obj => Object.entries(obj).map(([team,count])=>({team,count})).sort((a,b)=>b.count-a.count);
+
+    res.json({
+      topscorers: sort(goalMap).slice(0, 20),
+      assists: sort(assistMap).slice(0, 20),
+      yellow_cards: sort(yellowMap).slice(0, 20),
+      red_cards: sort(redMap).slice(0, 20),
+      team_goals: sortTeam(teamGoals).slice(0, 20),
+      team_conceded: sortTeam(teamConceded).slice(0, 20),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Serverfejl' });
+  }
+});
+
 // GET card points leaderboard (public)
 // Gul=2pt, Rød=5pt, Gul+Rød i samme kamp=5pt (kun rødt), 2 gule i samme kamp=4pt
 router.get('/stats/cards', async (req, res) => {

@@ -108,7 +108,7 @@ export function calcDreamTeamPoints(prediction, results) {
   return { pts, breakdown };
 }
 
-// Per-kamp: 1X2=3pt, første målscorer=3pt, kampens spiller=3pt
+// Per-kamp: 1X2=3pt, første målscorer=3pt, kampens spiller=3pt, eksakt score=3pt bonus
 export function calcMatchPoints(prediction, match, events) {
   if (!match || match.status !== 'finished') return { pts: 0, breakdown: [] };
   let pts = 0;
@@ -121,6 +121,17 @@ export function calcMatchPoints(prediction, match, events) {
   if (actual && prediction.prediction === actual) {
     pts += 3;
     breakdown.push({ cat: `Kampresultat (${match.home_team} vs ${match.away_team})`, pts: 3 });
+  }
+
+  // Eksakt score bonus
+  if (prediction.exact_home !== null && prediction.exact_home !== undefined &&
+      prediction.exact_away !== null && prediction.exact_away !== undefined &&
+      match.home_score !== null && match.away_score !== null) {
+    if (parseInt(prediction.exact_home) === match.home_score &&
+        parseInt(prediction.exact_away) === match.away_score) {
+      pts += 3;
+      breakdown.push({ cat: `Eksakt score (${match.home_score}-${match.away_score})`, pts: 3 });
+    }
   }
 
   const evs = events || match.events || [];

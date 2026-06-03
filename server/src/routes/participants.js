@@ -157,7 +157,7 @@ router.get('/:id/match-predictions', async (req, res) => {
 });
 
 router.put('/:id/match-predictions/:matchId', async (req, res) => {
-  const { pin, prediction, first_scorer_team, first_scorer_player, match_mvp_team, match_mvp_player } = req.body;
+  const { pin, prediction, first_scorer_team, first_scorer_player, match_mvp_team, match_mvp_player, exact_home, exact_away } = req.body;
   const { id, matchId } = req.params;
   try {
     const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [id, pin]);
@@ -167,13 +167,33 @@ router.put('/:id/match-predictions/:matchId', async (req, res) => {
     const lockTime = new Date(new Date(match.rows[0].kickoff).getTime() - 15*60*1000);
     if (new Date() > lockTime) return res.status(403).json({ error: 'Gæt er låst — kampen starter snart!' });
     await pool.query(`
-      INSERT INTO match_predictions (participant_id, match_id, prediction, first_scorer_team, first_scorer_player, match_mvp_team, match_mvp_player)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      INSERT INTO match_predictions (participant_id, match_id, prediction, first_scorer_team, first_scorer_player, match_mvp_team, match_mvp_player, exact_home, exact_away)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       ON CONFLICT (participant_id, match_id) DO UPDATE SET
         prediction=EXCLUDED.prediction, first_scorer_team=EXCLUDED.first_scorer_team,
-        first_scorer_player=EXCLUDED.first_scorer_player, match_mvp_team=EXCLUDED.match_mvp_team, match_mvp_player=EXCLUDED.match_mvp_player
-    `, [id, matchId, prediction, first_scorer_team||null, first_scorer_player||null, match_mvp_team||null, match_mvp_player||null]);
+        first_scorer_player=EXCLUDED.first_scorer_player, match_mvp_team=EXCLUDED.match_mvp_team,
+        match_mvp_player=EXCLUDED.match_mvp_player, exact_home=EXCLUDED.exact_home, exact_away=EXCLUDED.exact_away
+    `, [id, matchId, prediction, first_scorer_team||null, first_scorer_player||null, match_mvp_team||null, match_mvp_player||null, exact_home??null, exact_away??null]);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// GET public profile for any participant (all predictions visible)
+router.get('/:id/profile', async (req, res) => {
+  try {
+    const part = await pool.query('SELECT id, name, created_at FROM participants WHERE id=$1', [req.params.id]);
+    if (!part.rows.length) return res.status(404).json({ error: 'Deltager ikke fundet' });
+    const [tp, mp, dt] = await Promise.all([
+      pool.query('SELECT * FROM tournament_predictions WHERE participant_id=$1', [req.params.id]),
+      pool.query('SELECT * FROM match_predictions WHERE participant_id=$1', [req.params.id]),
+      pool.query('SELECT * FROM dream_team_predictions WHERE participant_id=$1', [req.params.id]),
+    ]);
+    res.json({
+      participant: part.rows[0],
+      tournament: tp.rows[0] || null,
+      matches: mp.rows,
+      dreamTeam: dt.rows[0] || null,
+    });
   } catch (err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
 

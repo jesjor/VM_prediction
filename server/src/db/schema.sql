@@ -211,3 +211,10 @@ DO $$ BEGIN
   ALTER TABLE match_events ADD COLUMN IF NOT EXISTS assist_team VARCHAR(100);
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- Exact score prediction
+DO $$ BEGIN
+  ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS exact_home INTEGER;
+  ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS exact_away INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
