@@ -25,6 +25,17 @@ function calcMatchPts(pred, match) {
     breakdown.push({ cat: `Kampresultat (gættet ${pred.prediction}, blev ${actual||'?'})`, pts: 0, hit: false })
   }
 
+  // Eksakt score
+  if (pred.exact_home !== null && pred.exact_home !== undefined &&
+      pred.exact_away !== null && pred.exact_away !== undefined &&
+      match.home_score !== null) {
+    if (parseInt(pred.exact_home) === match.home_score && parseInt(pred.exact_away) === match.away_score) {
+      pts += 3; breakdown.push({ cat: `Eksakt score ${match.home_score}-${match.away_score} ✓`, pts: 3, hit: true })
+    } else {
+      breakdown.push({ cat: `Eksakt score (gættet ${pred.exact_home}-${pred.exact_away}, blev ${match.home_score}-${match.away_score})`, pts: 0, hit: false })
+    }
+  }
+
   const evs = match.events || []
   const firstGoal = evs.find(e => e.event_type === 'goal' || e.event_type === 'own_goal')
   if (pred.first_scorer_team === 'ingen') {
