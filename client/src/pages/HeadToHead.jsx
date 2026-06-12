@@ -9,10 +9,10 @@ function calcMatchPts(pred, match) {
   let pts = 0
   const actual = match.home_score > match.away_score ? '1' : match.away_score > match.home_score ? '2' : 'X'
   if (pred?.prediction === actual) pts += 3
-  // Eksakt score
-  if (pred?.exact_home !== null && pred?.exact_home !== undefined &&
-      parseInt(pred.exact_home) === match.home_score &&
-      parseInt(pred.exact_away) === match.away_score) pts += 3
+  const ehNorm = pred?.exact_home !== null && pred?.exact_home !== undefined ? parseInt(pred.exact_home) : (pred?.exact_away !== null && pred?.exact_away !== undefined ? 0 : null)
+  const eaNorm = pred?.exact_away !== null && pred?.exact_away !== undefined ? parseInt(pred.exact_away) : (pred?.exact_home !== null && pred?.exact_home !== undefined ? 0 : null)
+  if (ehNorm !== null && eaNorm !== null && match.home_score !== null &&
+      ehNorm === match.home_score && eaNorm === match.away_score) pts += 3
   const evs = match.events || []
   const firstGoal = evs.find(e => e.event_type === 'goal' || e.event_type === 'own_goal')
   if (pred?.first_scorer_team === 'ingen' && !firstGoal) pts += 3

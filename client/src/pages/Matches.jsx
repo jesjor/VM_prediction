@@ -31,8 +31,15 @@ function fmt(iso) {
 // Inline guess form inside match card
 function InlineGuess({ match, participant, pin, squads, existingPred, onSaved }) {
   const [pred, setPred] = useState(existingPred?.prediction||'')
-  const [exactHome, setExactHome] = useState(existingPred?.exact_home??'')
-  const [exactAway, setExactAway] = useState(existingPred?.exact_away??'')
+  const [exactHome, setExactHome] = useState(existingPred?.exact_home ?? '')
+  const [exactAway, setExactAway] = useState(existingPred?.exact_away ?? '')
+
+  function selectPred(v) {
+    setPred(v)
+    // Auto-initialize score to 0 if not already set
+    if (exactHome === '') setExactHome('0')
+    if (exactAway === '') setExactAway('0')
+  }
   const [scorerTeam, setScorerTeam] = useState(existingPred?.first_scorer_team||'')
   const [scorerPlayer, setScorerPlayer] = useState(existingPred?.first_scorer_player||'')
   const [mvpTeam, setMvpTeam] = useState(existingPred?.match_mvp_team||'')
@@ -52,8 +59,8 @@ function InlineGuess({ match, participant, pin, squads, existingPred, onSaved })
         pin, prediction: pred,
         first_scorer_team: scorerTeam||null, first_scorer_player: scorerPlayer||null,
         match_mvp_team: mvpTeam||null, match_mvp_player: mvpPlayer||null,
-        exact_home: exactHome!==''?parseInt(exactHome):null,
-        exact_away: exactAway!==''?parseInt(exactAway):null,
+        exact_home: exactHome !== '' ? parseInt(exactHome) : null,
+        exact_away: exactAway !== '' ? parseInt(exactAway) : null,
       })
       setMsg('✅ Gemt!')
       onSaved()
@@ -71,7 +78,7 @@ function InlineGuess({ match, participant, pin, squads, existingPred, onSaved })
       {/* 1X2 */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:8}}>
         {[['1',home],['X','Uafgjort'],['2',away]].map(([v,label])=>(
-          <button key={v} onClick={()=>setPred(v)}
+          <button key={v} onClick={()=>selectPred(v)}
             style={{padding:'8px 4px',border:`1.5px solid ${pred===v?'var(--blue)':'var(--border2)'}`,
               background:pred===v?'rgba(59,130,246,.15)':'transparent',borderRadius:8,
               color:pred===v?'var(--blue)':'var(--text2)',cursor:'pointer',fontFamily:"'Barlow',sans-serif"}}>
@@ -83,13 +90,19 @@ function InlineGuess({ match, participant, pin, squads, existingPred, onSaved })
 
       {/* Exact score */}
       <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
-        <span style={{fontSize:12,color:'var(--text3)',flexShrink:0}}>🎯 Eksakt:</span>
-        <input type="number" min="0" max="20" value={exactHome} onChange={e=>setExactHome(e.target.value)}
-          style={{width:44,textAlign:'center',padding:'5px',border:'1px solid var(--border2)',borderRadius:6,background:'var(--bg3)',color:'var(--text)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:700}} placeholder="0"/>
+        <span style={{fontSize:12,color:'var(--text3)',flexShrink:0}}>🎯 Eksakt score:</span>
+        <input type="number" min="0" max="20" value={exactHome}
+          onChange={e=>setExactHome(e.target.value)}
+          style={{width:48,textAlign:'center',padding:'6px',border:`1.5px solid ${exactHome!==''?'var(--blue)':'var(--border2)'}`,borderRadius:6,background:'var(--bg3)',color:'var(--text)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:700}}
+          placeholder="—"/>
         <span style={{color:'var(--text3)',fontWeight:700}}>-</span>
-        <input type="number" min="0" max="20" value={exactAway} onChange={e=>setExactAway(e.target.value)}
-          style={{width:44,textAlign:'center',padding:'5px',border:'1px solid var(--border2)',borderRadius:6,background:'var(--bg3)',color:'var(--text)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:700}} placeholder="0"/>
-        <span style={{fontSize:11,color:'var(--text3)'}}>+3 pt bonus</span>
+        <input type="number" min="0" max="20" value={exactAway}
+          onChange={e=>setExactAway(e.target.value)}
+          style={{width:48,textAlign:'center',padding:'6px',border:`1.5px solid ${exactAway!==''?'var(--blue)':'var(--border2)'}`,borderRadius:6,background:'var(--bg3)',color:'var(--text)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:700}}
+          placeholder="—"/>
+        <span style={{fontSize:11,color:exactHome!==''&&exactAway!==''?'var(--gold)':'var(--text3)'}}>
+          {exactHome!==''&&exactAway!==''?'+3 pt hvis rigtig':'udfyld for bonus'}
+        </span>
       </div>
 
       {/* First scorer */}

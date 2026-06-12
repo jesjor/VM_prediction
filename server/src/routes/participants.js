@@ -277,7 +277,7 @@ router.get('/feed/activity', async (req, res) => {
       const participantResults = preds.rows.map(pred => {
         let pts = 0;
         if (pred.prediction === actual) pts += 3;
-        if (pred.exact_home!==null && parseInt(pred.exact_home)===m.home_score && parseInt(pred.exact_away)===m.away_score) pts += 3;
+        { const eh=pred.exact_home!==null?parseInt(pred.exact_home):(pred.exact_away!==null?0:null); const ea=pred.exact_away!==null?parseInt(pred.exact_away):(pred.exact_home!==null?0:null); if(eh!==null&&ea!==null&&eh===m.home_score&&ea===m.away_score) pts+=3; }
         if (pred.first_scorer_team==='ingen' && !firstGoal) pts += 3;
         else if (pred.first_scorer_player && firstGoal &&
           firstGoal.player?.toLowerCase()===pred.first_scorer_player?.toLowerCase()) pts += 3;
@@ -324,7 +324,7 @@ router.get('/:id/streak', async (req, res) => {
       const firstGoal = evs.find(e=>e.event_type==='goal'||e.event_type==='own_goal');
       let pts = 0;
       if (pred.prediction===actual) pts+=3;
-      if (pred.exact_home!==null && parseInt(pred.exact_home)===pred.home_score && parseInt(pred.exact_away)===pred.away_score) pts+=3;
+      { const eh=pred.exact_home!==null?parseInt(pred.exact_home):(pred.exact_away!==null?0:null); const ea=pred.exact_away!==null?parseInt(pred.exact_away):(pred.exact_home!==null?0:null); if(eh!==null&&ea!==null&&eh===pred.home_score&&ea===pred.away_score) pts+=3; }
       if (pred.first_scorer_team==='ingen'&&!firstGoal) pts+=3;
       else if (pred.first_scorer_player&&firstGoal&&firstGoal.player?.toLowerCase()===pred.first_scorer_player?.toLowerCase()) pts+=3;
       if (pred.match_mvp_player&&pred.match_mvp_player?.toLowerCase()===pred.match_mvp_player?.toLowerCase()) pts+=3;

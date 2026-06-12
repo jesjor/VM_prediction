@@ -124,11 +124,15 @@ export function calcMatchPoints(prediction, match, events) {
   }
 
   // Eksakt score bonus
-  if (prediction.exact_home !== null && prediction.exact_home !== undefined &&
-      prediction.exact_away !== null && prediction.exact_away !== undefined &&
-      match.home_score !== null && match.away_score !== null) {
-    if (parseInt(prediction.exact_home) === match.home_score &&
-        parseInt(prediction.exact_away) === match.away_score) {
+  // Eksakt score bonus — treat null as 0 (user may have left one field empty meaning 0)
+  const predHome = prediction.exact_home !== null && prediction.exact_home !== undefined ? parseInt(prediction.exact_home) : null;
+  const predAway = prediction.exact_away !== null && prediction.exact_away !== undefined ? parseInt(prediction.exact_away) : null;
+  // If one is set and other is null, treat null as 0
+  const ehNorm = predHome !== null ? predHome : (predAway !== null ? 0 : null);
+  const eaNorm = predAway !== null ? predAway : (predHome !== null ? 0 : null);
+  if (ehNorm !== null && eaNorm !== null && match.home_score !== null && match.away_score !== null) {
+    if (ehNorm === match.home_score &&
+        eaNorm === match.away_score) {
       pts += 3;
       breakdown.push({ cat: `Eksakt score (${match.home_score}-${match.away_score})`, pts: 3 });
     }

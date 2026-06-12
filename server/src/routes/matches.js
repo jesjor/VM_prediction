@@ -263,11 +263,13 @@ router.get('/:id/participants', async (req, res) => {
         breakdown.push({ cat: `Kampresultat (gættet ${pred.prediction}, blev ${actual||'?'})`, pts: 0, hit: false });
       }
 
-      if (pred.exact_home !== null && pred.exact_home !== undefined && m.home_score !== null) {
-        if (parseInt(pred.exact_home) === m.home_score && parseInt(pred.exact_away) === m.away_score) {
+      const ehNorm = pred.exact_home !== null && pred.exact_home !== undefined ? parseInt(pred.exact_home) : (pred.exact_away !== null && pred.exact_away !== undefined ? 0 : null);
+      const eaNorm = pred.exact_away !== null && pred.exact_away !== undefined ? parseInt(pred.exact_away) : (pred.exact_home !== null && pred.exact_home !== undefined ? 0 : null);
+      if (ehNorm !== null && eaNorm !== null && m.home_score !== null) {
+        if (ehNorm === m.home_score && eaNorm === m.away_score) {
           pts += 3; breakdown.push({ cat: `Eksakt score ${m.home_score}-${m.away_score}`, pts: 3, hit: true });
         } else {
-          breakdown.push({ cat: `Eksakt score (gættet ${pred.exact_home}-${pred.exact_away})`, pts: 0, hit: false });
+          breakdown.push({ cat: `Eksakt score (gættet ${ehNorm}-${eaNorm}, blev ${m.home_score}-${m.away_score})`, pts: 0, hit: false });
         }
       }
 

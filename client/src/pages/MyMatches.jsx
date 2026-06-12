@@ -25,14 +25,14 @@ function calcMatchPts(pred, match) {
     breakdown.push({ cat: `Kampresultat (gættet ${pred.prediction}, blev ${actual||'?'})`, pts: 0, hit: false })
   }
 
-  // Eksakt score
-  if (pred.exact_home !== null && pred.exact_home !== undefined &&
-      pred.exact_away !== null && pred.exact_away !== undefined &&
-      match.home_score !== null) {
-    if (parseInt(pred.exact_home) === match.home_score && parseInt(pred.exact_away) === match.away_score) {
+  // Eksakt score — treat null as 0 if other field is set
+  const ehNorm = pred.exact_home !== null && pred.exact_home !== undefined ? parseInt(pred.exact_home) : (pred.exact_away !== null && pred.exact_away !== undefined ? 0 : null)
+  const eaNorm = pred.exact_away !== null && pred.exact_away !== undefined ? parseInt(pred.exact_away) : (pred.exact_home !== null && pred.exact_home !== undefined ? 0 : null)
+  if (ehNorm !== null && eaNorm !== null && match.home_score !== null) {
+    if (ehNorm === match.home_score && eaNorm === match.away_score) {
       pts += 3; breakdown.push({ cat: `Eksakt score ${match.home_score}-${match.away_score} ✓`, pts: 3, hit: true })
     } else {
-      breakdown.push({ cat: `Eksakt score (gættet ${pred.exact_home}-${pred.exact_away}, blev ${match.home_score}-${match.away_score})`, pts: 0, hit: false })
+      breakdown.push({ cat: `Eksakt score (gættet ${ehNorm}-${eaNorm}, blev ${match.home_score}-${match.away_score})`, pts: 0, hit: false })
     }
   }
 

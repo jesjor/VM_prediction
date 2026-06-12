@@ -82,8 +82,14 @@ function GroupPickers({ data, onChange }) {
 
 function MatchPredictCard({ match, participantId, pin, existing, squads }) {
   const [pred, setPred] = useState(existing?.prediction||'')
-  const [exactHome, setExactHome] = useState(existing?.exact_home??'')
-  const [exactAway, setExactAway] = useState(existing?.exact_away??'')
+  const [exactHome, setExactHome] = useState(existing?.exact_home ?? '')
+  const [exactAway, setExactAway] = useState(existing?.exact_away ?? '')
+
+  function selectPred(v) {
+    setPred(v)
+    if (exactHome === '') setExactHome('0')
+    if (exactAway === '') setExactAway('0')
+  }
   const [scorerTeam, setScorerTeam] = useState(existing?.first_scorer_team||'')
   const [scorerPlayer, setScorerPlayer] = useState(existing?.first_scorer_player||'')
   const [mvpTeam, setMvpTeam] = useState(existing?.match_mvp_team||'')
@@ -151,7 +157,7 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
         : <>
             <div className="result-picker">
               {[['1',homeTeam],['X','Uafgjort'],['2',awayTeam]].map(([v,label])=>(
-                <button key={v} className={`result-btn${pred===v?' active':''}`} onClick={()=>setPred(v)}>
+                <button key={v} className={`result-btn${pred===v?' active':''}`} onClick={()=>selectPred(v)}>
                   <span className="result-label">{v}</span>
                   <span className="result-team">{label}</span>
                 </button>
@@ -161,10 +167,18 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
             <div className="form-group">
               <div className="form-label">🎯 Eksakt score · +3 pt bonus</div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <input className="form-input" type="number" min="0" max="20" value={exactHome} onChange={e=>setExactHome(e.target.value)} placeholder="0" style={{width:64,textAlign:'center',fontSize:18,fontWeight:700}} />
+                <input className="form-input" type="number" min="0" max="20" value={exactHome}
+                  onChange={e=>setExactHome(e.target.value)}
+                  placeholder="—"
+                  style={{width:64,textAlign:'center',fontSize:18,fontWeight:700,border:`1.5px solid ${exactHome!==''?'var(--blue)':'var(--border2)'}`}} />
                 <span style={{fontSize:18,color:'var(--text3)',fontWeight:700}}>-</span>
-                <input className="form-input" type="number" min="0" max="20" value={exactAway} onChange={e=>setExactAway(e.target.value)} placeholder="0" style={{width:64,textAlign:'center',fontSize:18,fontWeight:700}} />
-                <span style={{fontSize:12,color:'var(--text3)'}}>({homeTeam} - {awayTeam})</span>
+                <input className="form-input" type="number" min="0" max="20" value={exactAway}
+                  onChange={e=>setExactAway(e.target.value)}
+                  placeholder="—"
+                  style={{width:64,textAlign:'center',fontSize:18,fontWeight:700,border:`1.5px solid ${exactAway!==''?'var(--blue)':'var(--border2)'}`}} />
+                <span style={{fontSize:12,color:exactHome!==''&&exactAway!==''?'var(--gold)':'var(--text3)'}}>
+                  {exactHome!==''&&exactAway!==''?'✓ sat':'udfyld for +3 pt'}
+                </span>
               </div>
             </div>
 
