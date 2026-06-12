@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../api'
 import MyMatches from './MyMatches.jsx'
+import { playerLabel, sortPlayers } from '../posLabel.js'
 
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const ALL_TEAMS = ['Algeria','Argentina','Australia','Austria','Belgium','Bosnia & Herzegovina','Brazil','Canada','Cape Verde','Colombia','Croatia','Curaçao','Czechia','DR Congo','Ecuador','Egypt','England','France','Germany','Ghana','Haiti','Iran','Iraq','Ivory Coast','Japan','Jordan','Mexico','Morocco','Netherlands','New Zealand','Norway','Panama','Paraguay','Portugal','Qatar','Saudi Arabia','Scotland','Senegal','South Africa','South Korea','Spain','Sweden','Switzerland','Tunisia','Türkiye','Uruguay','USA','Uzbekistan']
@@ -17,14 +18,17 @@ function sel(id, val, opts, onChange, placeholder='— Vælg —') {
 
 function TeamPlayerPicker({ label, teamKey, playerKey, data, onChange, squads, pts, note }) {
   const team = data[teamKey] || ''
-  const players = team && squads[team] ? squads[team].map(p=>p.player) : []
+  const players = team && squads[team] ? sortPlayers(squads[team]) : []
   return (
     <div className="form-group">
       <div className="form-label">{label}{pts && <span style={{color:'var(--gold)',marginLeft:4}}>· {pts}</span>}</div>
       {note && <div style={{fontSize:12,color:'var(--text3)',marginBottom:4}}>{note}</div>}
       <div className="grid-2" style={{gap:6}}>
         {sel('t-'+teamKey, team, ALL_TEAMS, v => onChange({...data,[teamKey]:v,[playerKey]:''}), '— Hold —')}
-        {sel('p-'+playerKey, data[playerKey]||'', players, v => onChange({...data,[playerKey]:v}), '— Spiller —')}
+        <select className="form-select" value={data[playerKey]||''} onChange={e=>onChange({...data,[playerKey]:e.target.value})} disabled={!team}>
+          <option value="">— Vælg spiller —</option>
+          {players.map(p => <option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
+        </select>
       </div>
     </div>
   )
@@ -40,13 +44,16 @@ function Top3PlayerPicker({ label, prefix, data, onChange, squads, ptsArr=[20,15
       {[1,2,3].map(i => {
         const tk = `${prefix}_${i}_team`, pk = `${prefix}_${i}_player`
         const team = data[tk]||''
-        const players = team && squads[team] ? squads[team].map(p=>p.player) : []
+        const players = team && squads[team] ? sortPlayers(squads[team]) : []
         return (
           <div key={i} style={{marginBottom:8}}>
             <div className="form-label">{i}. plads <span style={{color:i===1?'var(--gold)':i===2?'var(--text2)':'var(--text3)'}}>{ptsArr[i-1]} pt</span></div>
             <div className="grid-2" style={{gap:6}}>
               {sel(`t-${prefix}-${i}`, team, ALL_TEAMS, v => onChange({...data,[tk]:v,[pk]:''}), '— Hold —')}
-              {sel(`p-${prefix}-${i}`, data[pk]||'', players, v => onChange({...data,[pk]:v}), '— Spiller —')}
+              <select className="form-select" value={data[pk]||''} onChange={e=>onChange({...data,[pk]:e.target.value})} disabled={!team}>
+                <option value="">— Vælg spiller —</option>
+                {players.map(p => <option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
+              </select>
             </div>
           </div>
         )
@@ -101,8 +108,8 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
   const locked = new Date() > lockTime
 
   const homeTeam = match.home_team || '?', awayTeam = match.away_team || '?'
-  const scorerPlayers = scorerTeam && scorerTeam !== 'ingen' && squads[scorerTeam] ? squads[scorerTeam].map(p=>p.player) : []
-  const mvpPlayers = mvpTeam && squads[mvpTeam] ? squads[mvpTeam].map(p=>p.player) : []
+  const scorerPlayers = scorerTeam && scorerTeam !== 'ingen' && squads[scorerTeam] ? sortPlayers(squads[scorerTeam]) : []
+  const mvpPlayers = mvpTeam && squads[mvpTeam] ? sortPlayers(squads[mvpTeam]) : []
   const bothTeams = [homeTeam, awayTeam].filter(t => t !== '?')
 
   function fmt(iso) {
@@ -193,7 +200,7 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
                 {scorerTeam && scorerTeam !== 'ingen' && (
                   <select className="form-select" value={scorerPlayer} onChange={e=>setScorerPlayer(e.target.value)}>
                     <option value="">— Spiller —</option>
-                    {scorerPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+                    {scorerPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
                   </select>
                 )}
               </div>
@@ -209,7 +216,7 @@ function MatchPredictCard({ match, participantId, pin, existing, squads }) {
                 {mvpTeam && (
                   <select className="form-select" value={mvpPlayer} onChange={e=>setMvpPlayer(e.target.value)}>
                     <option value="">— Spiller —</option>
-                    {mvpPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+                    {mvpPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
                   </select>
                 )}
               </div>
@@ -261,8 +268,8 @@ function DreamTeamPicker({ participantId, pin, squads }) {
     setTimeout(()=>setMsg(''),4000)
   }
 
-  const addPlayers = addTeam && squads[addTeam] ? squads[addTeam].map(p=>p.player) : []
-  const bestPlayers = bestTeam && squads[bestTeam] ? squads[bestTeam].map(p=>p.player) : []
+  const addPlayers = addTeam && squads[addTeam] ? sortPlayers(squads[addTeam]) : []
+  const bestPlayers = bestTeam && squads[bestTeam] ? sortPlayers(squads[bestTeam]) : []
 
   return (
     <div>
@@ -294,7 +301,7 @@ function DreamTeamPicker({ participantId, pin, squads }) {
               </select>
               <select className="form-select" value={addPlayer} onChange={e=>setAddPlayer(e.target.value)} disabled={!addTeam} style={{flex:'1 1 140px',minWidth:120}}>
                 <option value="">— Spiller —</option>
-                {addPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+                {addPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
               </select>
               <button className="btn btn-primary btn-sm" onClick={addToTeam} disabled={!addPlayer} style={{flexShrink:0}}>+ Tilføj</button>
             </div>
@@ -311,7 +318,7 @@ function DreamTeamPicker({ participantId, pin, squads }) {
           </select>
           <select className="form-select" value={bestPlayer} onChange={e=>setBestPlayer(e.target.value)} disabled={!bestTeam}>
             <option value="">— Spiller —</option>
-            {bestPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+            {bestPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
           </select>
         </div>
       </div>

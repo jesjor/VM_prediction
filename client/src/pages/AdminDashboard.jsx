@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import { playerLabel, sortPlayers } from '../posLabel.js'
 
 const ROUND_LABELS = { GROUP:'Gruppe', R32:'R32', R16:'R16', QF:'QF', SF:'SF', '3RD':'3.pl', FINAL:'FINALE' }
 const ALL_TEAMS = ['Algeria','Argentina','Australia','Austria','Belgium','Bosnia & Herzegovina','Brazil','Canada','Cape Verde','Colombia','Croatia','Curaçao','Czechia','DR Congo','Ecuador','Egypt','England','France','Germany','Ghana','Haiti','Iran','Iraq','Ivory Coast','Japan','Jordan','Mexico','Morocco','Netherlands','New Zealand','Norway','Panama','Paraguay','Portugal','Qatar','Saudi Arabia','Scotland','Senegal','South Africa','South Korea','Spain','Sweden','Switzerland','Tunisia','Türkiye','Uruguay','USA','Uzbekistan']
@@ -11,10 +12,10 @@ function fmt(iso) {
 
 function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove }) {
   const teams = [homeTeam, awayTeam].filter(Boolean)
-  const players = ev.team && squads[ev.team] ? squads[ev.team].map(p=>p.player) : []
+  const players = ev.team && squads[ev.team] ? sortPlayers(squads[ev.team]) : []
   const isGoal = ev.event_type === 'goal'
   // Assist players = same team as scorer
-  const assistPlayers = ev.team && squads[ev.team] ? squads[ev.team].map(p=>p.player) : []
+  const assistPlayers = ev.team && squads[ev.team] ? sortPlayers(squads[ev.team]) : []
 
   return (
     <div style={{marginBottom:6,background:'var(--bg3)',borderRadius:8,padding:'8px'}}>
@@ -33,7 +34,7 @@ function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove })
         </select>
         <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
           <option value="">Spiller</option>
-          {players.map(p=><option key={p} value={p}>{p}</option>)}
+          {players.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
         </select>
         <button className="btn btn-sm btn-danger" onClick={()=>onRemove(index)} style={{padding:'4px 8px',minHeight:32}}>✕</button>
       </div>
@@ -42,7 +43,7 @@ function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove })
           <div style={{fontSize:12,color:'var(--text3)',paddingLeft:4,whiteSpace:'nowrap'}}>🎯 Assist ({ev.team||'—'}):</div>
           <select className="form-select" value={ev.assist_player||''} onChange={e=>onChange(index,'assist_player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
             <option value="">Ingen assist</option>
-            {assistPlayers.filter(p=>p!==ev.player).map(p=><option key={p} value={p}>{p}</option>)}
+            {assistPlayers.filter(p=>p.player!==ev.player).map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
           </select>
         </div>
       )}
@@ -78,7 +79,7 @@ function MatchEditor({ match, squads, onSave }) {
   const away = awayTeam || match.away_team || match.away_slot || '?'
   const preview = calcPreviewScore(events, home, away)
   const isKnockout = match.round !== 'GROUP'
-  const mvpPlayers = mvpTeam && squads[mvpTeam] ? squads[mvpTeam].map(p=>p.player) : []
+  const mvpPlayers = mvpTeam && squads[mvpTeam] ? sortPlayers(squads[mvpTeam]) : []
 
   function addEvent() {
     setEvents(e=>[...e,{team:home!=='?'?home:'',player:'',event_type:'goal',minute:''}])
@@ -193,7 +194,7 @@ function MatchEditor({ match, squads, onSave }) {
               </select>
               <select className="form-select" value={mvpPlayer} onChange={e=>setMvpPlayer(e.target.value)} disabled={!mvpTeam}>
                 <option value="">— Spiller —</option>
-                {mvpPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+                {mvpPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
               </select>
             </div>
           </div>

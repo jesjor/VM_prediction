@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import { playerLabel, sortPlayers } from '../posLabel.js'
 
 const ROUND_LABELS = { GROUP:'Gruppespil', R32:'Runde af 32', R16:'Runde af 16', QF:'Kvartfinale', SF:'Semifinale', '3RD':'3. plads', FINAL:'FINALE' }
 
@@ -48,8 +49,8 @@ function InlineGuess({ match, participant, pin, squads, existingPred, onSaved })
   const [saving, setSaving] = useState(false)
 
   const teams = [match.home_team, match.away_team].filter(Boolean)
-  const scorerPlayers = scorerTeam && scorerTeam!=='ingen' && squads[scorerTeam] ? squads[scorerTeam].map(p=>p.player) : []
-  const mvpPlayers = mvpTeam && squads[mvpTeam] ? squads[mvpTeam].map(p=>p.player) : []
+  const scorerPlayers = scorerTeam && scorerTeam!=='ingen' && squads[scorerTeam] ? sortPlayers(squads[scorerTeam]) : []
+  const mvpPlayers = mvpTeam && squads[mvpTeam] ? sortPlayers(squads[mvpTeam]) : []
 
   async function save() {
     if (!pred) return setMsg('Vælg 1, X eller 2')
@@ -117,7 +118,7 @@ function InlineGuess({ match, participant, pin, squads, existingPred, onSaved })
           <select style={{flex:'1 1 120px',padding:'6px 8px',border:'1px solid var(--border2)',borderRadius:6,background:'var(--bg3)',color:'var(--text)',fontSize:13,fontFamily:"'Barlow',sans-serif"}}
             value={scorerPlayer} onChange={e=>setScorerPlayer(e.target.value)}>
             <option value="">— Spiller —</option>
-            {scorerPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+            {scorerPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
           </select>
         )}
       </div>
@@ -133,7 +134,7 @@ function InlineGuess({ match, participant, pin, squads, existingPred, onSaved })
           <select style={{flex:'1 1 120px',padding:'6px 8px',border:'1px solid var(--border2)',borderRadius:6,background:'var(--bg3)',color:'var(--text)',fontSize:13,fontFamily:"'Barlow',sans-serif"}}
             value={mvpPlayer} onChange={e=>setMvpPlayer(e.target.value)}>
             <option value="">— Spiller —</option>
-            {mvpPlayers.map(p=><option key={p} value={p}>{p}</option>)}
+            {mvpPlayers.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
           </select>
         )}
       </div>
