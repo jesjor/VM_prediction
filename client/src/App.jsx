@@ -7,8 +7,9 @@ import Stats from './pages/Stats.jsx'
 import Bracket from './pages/Bracket.jsx'
 import Profile from './pages/Profile.jsx'
 import HeadToHead from './pages/HeadToHead.jsx'
-import NavBadge from './components/NavBadge.jsx'
+import AdminLogin from './pages/AdminLogin.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
+import NavBadge from './components/NavBadge.jsx'
 
 function NavIcon({ name }) {
   const icons = {
