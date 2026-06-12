@@ -7,7 +7,7 @@ import Stats from './pages/Stats.jsx'
 import Bracket from './pages/Bracket.jsx'
 import Profile from './pages/Profile.jsx'
 import HeadToHead from './pages/HeadToHead.jsx'
-import AdminLogin from './pages/AdminLogin.jsx'
+import NavBadge from './components/NavBadge.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 
 function NavIcon({ name }) {
@@ -42,7 +42,12 @@ export default function App() {
           <a href="/" className="nav-logo">⚽ VM 2026</a>
           <div className="nav-links">
             {NAV.map(n=>(
-              <NavLink key={n.to} to={n.to} end={n.end} className={({isActive})=>`nav-link${isActive?' active':''}`}>{n.label}</NavLink>
+              <NavLink key={n.to} to={n.to} end={n.end} className={({isActive})=>`nav-link${isActive?' active':''}`}>
+                <span style={{position:'relative',display:'inline-block'}}>
+                  {n.label}
+                  {n.to==='/gaet' && <NavBadge />}
+                </span>
+              </NavLink>
             ))}
             <NavLink to="/bracket" className={({isActive})=>`nav-link${isActive?' active':''}`}>Bracket</NavLink>
             <NavLink to="/h2h" className={({isActive})=>`nav-link${isActive?' active':''}`}>H2H</NavLink>
@@ -73,7 +78,11 @@ export default function App() {
       <nav className="bottom-nav">
         {NAV.map(n=>(
           <NavLink key={n.to} to={n.to} end={n.end} className={({isActive})=>`bottom-nav-item${isActive?' active':''}`}>
-            <NavIcon name={n.icon}/>{n.label}
+            <span style={{position:'relative',display:'inline-flex',flexDirection:'column',alignItems:'center',gap:3}}>
+              <NavIcon name={n.icon}/>
+              {n.to==='/gaet' && <NavBadge />}
+            </span>
+            {n.label}
           </NavLink>
         ))}
         <NavLink to={isAdmin?'/admin':'/admin/login'} className={({isActive})=>`bottom-nav-item${isActive?' active':''}`}>

@@ -333,3 +333,79 @@ router.get('/:id/streak', async (req, res) => {
     res.json({ streak });
   } catch(err) { res.status(500).json({error:'Serverfejl'}); }
 });
+
+// GET personal stats for a participant
+router.get('/:id/personal-stats', async (req, res) => {
+  try {
+    const preds = await pool.query(`
+      SELECT mp.*, m.home_score, m.away_score, m.status, m.home_team, m.away_team,
+             m.match_mvp_player, m.kickoff,
+             COALESCE(json_agg(me ORDER BY me.minute) FILTER (WHERE me.id IS NOT NULL), '[]') as events
+      FROM match_predictions mp
+      JOIN matches m ON m.id=mp.match_id
+      LEFT JOIN match_events me ON me.match_id=m.id
+      WHERE mp.participant_id=$1 AND m.status='finished'
+      GROUP BY mp.id, m.id ORDER BY m.kickoff DESC
+    `, [req.params.id]);
+
+    let resultHits=0, exactHits=0, scorerHits=0, mvpHits=0, totalPts=0, bestMatch={pts:0};
+    const rows = preds.rows;
+
+    for (const pred of rows) {
+      const actual = pred.home_score > pred.away_score ? '1' : pred.away_score > pred.home_score ? '2' : 'X';
+      const evs = pred.events||[];
+      const firstGoal = evs.find(e=>e.event_type==='goal'||e.event_type==='own_goal');
+      let pts=0;
+      if (pred.prediction===actual) { resultHits++; pts+=3; }
+      const eh=pred.exact_home!==null?parseInt(pred.exact_home):(pred.exact_away!==null?0:null);
+      const ea=pred.exact_away!==null?parseInt(pred.exact_away):(pred.exact_home!==null?0:null);
+      if (eh!==null&&ea!==null&&eh===pred.home_score&&ea===pred.away_score) { exactHits++; pts+=3; }
+      if (pred.first_scorer_player&&firstGoal&&firstGoal.player?.toLowerCase()===pred.first_scorer_player?.toLowerCase()) { scorerHits++; pts+=3; }
+      if (pred.match_mvp_player&&pred.match_mvp_player&&pred.match_mvp_player?.toLowerCase()===pred.match_mvp_player?.toLowerCase()) { mvpHits++; pts+=3; }
+      totalPts+=pts;
+      if (pts>bestMatch.pts) bestMatch={pts,home:pred.home_team,away:pred.away_team,score:`${pred.home_score}-${pred.away_score}`,kickoff:pred.kickoff};
+    }
+
+    res.json({
+      total_matches: rows.length,
+      result_hits: resultHits, result_pct: rows.length>0?Math.round(resultHits/rows.length*100):0,
+      exact_hits: exactHits,
+      scorer_hits: scorerHits, scorer_pct: rows.length>0?Math.round(scorerHits/rows.length*100):0,
+      mvp_hits: mvpHits,
+      total_match_pts: totalPts,
+      best_match: bestMatch.pts>0?bestMatch:null,
+    });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// GET consensus - what everyone agrees on for tournament predictions
+router.get('/consensus/tournament', async (req, res) => {
+  try {
+    const total = await pool.query('SELECT COUNT(*) as count FROM tournament_predictions');
+    const n = parseInt(total.rows[0].count);
+    if (n === 0) return res.json({ total: 0, items: [] });
+
+    const tp = await pool.query('SELECT * FROM tournament_predictions');
+    const counts = {};
+    const add = (key, val) => { if (!val) return; if (!counts[key]) counts[key]={}; counts[key][val]=(counts[key][val]||0)+1; };
+
+    for (const p of tp.rows) {
+      add('VM Vinder', p.country_1);
+      add('VM Top 2', p.country_2);
+      add('VM Top 3', p.country_3);
+      add('Topscorer Top 1', p.topscorer_1_player);
+      add('Topscorer Top 2', p.topscorer_2_player);
+      add('Assist Top 1', p.assist_1_player);
+      add('Turneringsspiller', p.tournament_player);
+    }
+
+    const items = [];
+    for (const [cat, valMap] of Object.entries(counts)) {
+      const sorted = Object.entries(valMap).sort((a,b)=>b[1]-a[1]);
+      const [topVal, topCount] = sorted[0];
+      items.push({ cat, top: topVal, count: topCount, pct: Math.round(topCount/n*100), total: n, others: sorted.slice(1,3).map(([v,c])=>({v,c})) });
+    }
+    items.sort((a,b)=>b.pct-a.pct);
+    res.json({ total: n, items });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});

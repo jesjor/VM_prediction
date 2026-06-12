@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import DagensKamp from './DagensKamp.jsx'
+import Consensus from './Consensus.jsx'
 
 const COLORS = ['#3b82f6','#8b5cf6','#10b981','#f97316','#ec4899','#06b6d4','#84cc16','#f59e0b']
 const getColor = name => COLORS[name.charCodeAt(0) % COLORS.length]
@@ -82,7 +84,9 @@ export default function Leaderboard() {
 
       <div className="tabs">
         <button className={`tab-btn${tab==='leaderboard'?' active':''}`} onClick={()=>setTab('leaderboard')}>🏆 Stillinger</button>
+        <button className={`tab-btn${tab==='upcoming'?' active':''}`} onClick={()=>setTab('upcoming')}>⚽ Næste kampe</button>
         <button className={`tab-btn${tab==='feed'?' active':''}`} onClick={()=>setTab('feed')}>📰 Seneste kampe</button>
+        <button className={`tab-btn${tab==='consensus'?' active':''}`} onClick={()=>setTab('consensus')}>🤝 Konsensus</button>
         <button className={`tab-btn${tab==='points'?' active':''}`} onClick={()=>setTab('points')}>ℹ️ Point</button>
       </div>
 
@@ -126,6 +130,8 @@ export default function Leaderboard() {
         </>
       )}
 
+      {tab==='upcoming' && <DagensKamp />}
+      {tab==='consensus' && <div className="card" style={{padding:'1rem'}}><Consensus /></div>}
       {tab==='feed' && (
         <div className="card" style={{padding:'1rem'}}>
           <ActivityFeed />

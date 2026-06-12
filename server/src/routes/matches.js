@@ -300,3 +300,26 @@ router.get('/:id/participants', async (req, res) => {
     res.json({ locked: true, match: m, participants: results });
   } catch(err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
 });
+
+// GET next upcoming match (for "dagens kamp" banner)
+router.get('/stats/next', async (req, res) => {
+  try {
+    const next = await pool.query(`
+      SELECT m.*, COALESCE(json_agg(me ORDER BY me.minute) FILTER (WHERE me.id IS NOT NULL), '[]') as events
+      FROM matches m LEFT JOIN match_events me ON me.match_id=m.id
+      WHERE m.status != 'finished' AND m.home_team IS NOT NULL AND m.away_team IS NOT NULL
+      GROUP BY m.id ORDER BY m.kickoff ASC LIMIT 3
+    `);
+    // Also get guess counts for each
+    const results = await Promise.all(next.rows.map(async m => {
+      const counts = await pool.query(
+        'SELECT prediction, COUNT(*) as count FROM match_predictions WHERE match_id=$1 GROUP BY prediction',
+        [m.id]
+      );
+      const gc = { '1': 0, 'X': 0, '2': 0, total: 0 };
+      counts.rows.forEach(r => { gc[r.prediction] = parseInt(r.count); gc.total += parseInt(r.count); });
+      return { ...m, guess_counts: gc };
+    }));
+    res.json(results);
+  } catch(err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
+});
