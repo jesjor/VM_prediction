@@ -14,11 +14,12 @@ function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove })
   const teams = [homeTeam, awayTeam].filter(Boolean)
   const players = ev.team && squads[ev.team] ? sortPlayers(squads[ev.team]) : []
   const isGoal = ev.event_type === 'goal'
-  // Assist players = same team as scorer
   const assistPlayers = ev.team && squads[ev.team] ? sortPlayers(squads[ev.team]) : []
+  const unmatched = ev._unmatched
+  const assistUnmatched = ev._assist_unmatched
 
   return (
-    <div style={{marginBottom:6,background:'var(--bg3)',borderRadius:8,padding:'8px'}}>
+    <div style={{marginBottom:6,background: unmatched ? 'rgba(245,158,11,.08)' : 'var(--bg3)',borderRadius:8,padding:'8px',border: unmatched ? '1px solid rgba(245,158,11,.3)' : '1px solid transparent'}}>
       <div style={{display:'grid',gridTemplateColumns:'55px 110px 1fr 1fr 36px',gap:4,marginBottom: isGoal ? 6 : 0}}>
         <input className="form-input" type="number" min="1" max="125" placeholder="Min" value={ev.minute||''} onChange={e=>onChange(index,'minute',e.target.value)} style={{padding:'6px 8px',fontSize:13}} />
         <select className="form-select" value={ev.event_type} onChange={e=>onChange(index,'event_type',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
@@ -32,19 +33,25 @@ function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove })
           <option value="">Hold</option>
           {teams.map(t=><option key={t} value={t}>{t}</option>)}
         </select>
-        <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
-          <option value="">Spiller</option>
-          {players.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
-        </select>
+        <div style={{position:'relative'}}>
+          {unmatched && <div style={{fontSize:10,color:'var(--gold)',marginBottom:2}}>⚠️ API: "{ev._api_player}"</div>}
+          <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13,borderColor: unmatched ? 'var(--gold)' : undefined}}>
+            <option value="">{unmatched ? `⚠️ Vælg spiller (API: ${ev._api_player})` : 'Spiller'}</option>
+            {players.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
+          </select>
+        </div>
         <button className="btn btn-sm btn-danger" onClick={()=>onRemove(index)} style={{padding:'4px 8px',minHeight:32}}>✕</button>
       </div>
       {isGoal && (
         <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:6,alignItems:'center'}}>
           <div style={{fontSize:12,color:'var(--text3)',paddingLeft:4,whiteSpace:'nowrap'}}>🎯 Assist ({ev.team||'—'}):</div>
-          <select className="form-select" value={ev.assist_player||''} onChange={e=>onChange(index,'assist_player',e.target.value)} style={{padding:'6px 8px',fontSize:13}}>
-            <option value="">Ingen assist</option>
-            {assistPlayers.filter(p=>p.player!==ev.player).map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
-          </select>
+          <div>
+            {assistUnmatched && <div style={{fontSize:10,color:'var(--gold)',marginBottom:2}}>⚠️ API: "{ev._api_assist}"</div>}
+            <select className="form-select" value={ev.assist_player||''} onChange={e=>onChange(index,'assist_player',e.target.value)} style={{padding:'6px 8px',fontSize:13,width:'100%',borderColor: assistUnmatched ? 'var(--gold)' : undefined}}>
+              <option value="">{assistUnmatched ? `⚠️ Vælg assist (API: ${ev._api_assist})` : 'Ingen assist'}</option>
+              {assistPlayers.filter(p=>p.player!==ev.player).map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
+            </select>
+          </div>
         </div>
       )}
     </div>
@@ -74,12 +81,47 @@ function MatchEditor({ match, squads, onSave }) {
   const [mvpPlayer, setMvpPlayer] = useState(match.match_mvp_player||'')
   const [msg, setMsg] = useState('')
   const [saving, setSaving] = useState(false)
+  const [fetching, setFetching] = useState(false)
+  const [fetchWarnings, setFetchWarnings] = useState([])
 
   const home = homeTeam || match.home_team || match.home_slot || '?'
   const away = awayTeam || match.away_team || match.away_slot || '?'
   const preview = calcPreviewScore(events, home, away)
   const isKnockout = match.round !== 'GROUP'
   const mvpPlayers = mvpTeam && squads[mvpTeam] ? sortPlayers(squads[mvpTeam]) : []
+
+  async function liveFetch() {
+    if (home==='?' || away==='?') return setMsg('Sæt holdnavne først')
+    setFetching(true); setMsg(''); setFetchWarnings([])
+    try {
+      const r = await api.get(`/matches/${match.id}/livefetch`)
+      const d = r.data
+      const mapped = d.events.map(ev => ({
+        event_type: ev.event_type,
+        minute: ev.minute,
+        team: ev.our_team,
+        player: ev.player,
+        assist_player: ev.assist_player || null,
+        _api_player: ev.api_player,
+        _unmatched: ev.player_unmatched,
+        _assist_unmatched: ev.assist_unmatched,
+        _api_assist: ev.api_assist,
+        _team_players: ev.team_players,
+      }))
+      setEvents(mapped)
+      if (d.finished) setStatus('finished')
+      else if (['1H','2H','HT'].includes(d.status)) setStatus('live')
+      const warnings = mapped.filter(ev => ev._unmatched || ev._assist_unmatched)
+        .map(ev => ev._unmatched
+          ? `Min ${ev.minute}: "${ev._api_player}" → hold ${ev.team} — vælg korrekt spiller`
+          : `Min ${ev.minute}: Assist "${ev._api_assist}" → hold ${ev.team} — vælg korrekt spiller`)
+      setFetchWarnings(warnings)
+      setMsg(`✅ Hentet! ${d.api_home} ${d.home_score}-${d.away_score} ${d.api_away}${warnings.length ? ` · ${warnings.length} navne kræver bekræftelse` : ''}`)
+    } catch(e) {
+      setMsg('❌ ' + (e.response?.data?.error || e.message || 'Fejl'))
+    }
+    setFetching(false)
+  }
 
   function addEvent() {
     setEvents(e=>[...e,{team:home!=='?'?home:'',player:'',event_type:'goal',minute:''}])
@@ -108,8 +150,7 @@ function MatchEditor({ match, squads, onSave }) {
         match_mvp_team: mvpTeam||null,
         status, events: events.filter(e=>e.player&&e.event_type)
       })
-      setMsg('✅ Gemt!')
-      onSave()
+      setMsg('✅ Gemt!'); onSave(); setFetchWarnings([])
       setTimeout(()=>{setMsg('');setOpen(false)},2000)
     } catch(e) { setMsg(e.response?.data?.error||'Fejl') }
     setSaving(false)
@@ -135,6 +176,26 @@ function MatchEditor({ match, squads, onSave }) {
       {open && (
         <div style={{marginTop:12,borderTop:'1px solid var(--border)',paddingTop:12}}>
           {msg && <div className={`alert ${msg.includes('✅')?'alert-success':'alert-error'}`} style={{marginBottom:8}}>{msg}</div>}
+
+          {/* Live fetch button */}
+          {home!=='?' && away!=='?' && (
+            <div style={{marginBottom:12}}>
+              <button className="btn btn-primary btn-full" onClick={liveFetch} disabled={fetching} style={{marginBottom:6}}>
+                {fetching ? '📡 Henter fra API-Football...' : '📡 Hent kampdata automatisk'}
+              </button>
+              <div style={{fontSize:11,color:'var(--text3)',textAlign:'center'}}>
+                Henter mål, kort og assists — du kan rette navne efterfølgende
+              </div>
+            </div>
+          )}
+
+          {/* Warnings for unmatched names */}
+          {fetchWarnings.length > 0 && (
+            <div style={{background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:8,padding:'8px 12px',marginBottom:10}}>
+              <div style={{fontSize:12,fontWeight:700,color:'var(--gold)',marginBottom:4}}>⚠️ {fetchWarnings.length} navne matcher ikke vores truppeliste — ret dem nedenfor:</div>
+              {fetchWarnings.map((w,i)=><div key={i} style={{fontSize:12,color:'var(--text2)',padding:'1px 0'}}>• {w}</div>)}
+            </div>
+          )}
 
           {/* Team names for knockout */}
           {isKnockout && (
