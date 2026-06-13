@@ -245,3 +245,19 @@ DO $$ BEGIN
   ALTER TABLE match_events ADD COLUMN IF NOT EXISTS is_var_penalty BOOLEAN DEFAULT FALSE;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- VAR special predictions table
+CREATE TABLE IF NOT EXISTS var_predictions (
+  id SERIAL PRIMARY KEY,
+  participant_id INTEGER REFERENCES participants(id) ON DELETE CASCADE,
+  var_penalties INTEGER,
+  var_red_cards INTEGER,
+  var_goals_disallowed INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(participant_id)
+);
+
+-- VAR actual results
+INSERT INTO tournament_results (result_key, player) VALUES ('var_red_cards_total', '0') ON CONFLICT (result_key) DO NOTHING;
+INSERT INTO tournament_results (result_key, player) VALUES ('var_goals_disallowed_total', '0') ON CONFLICT (result_key) DO NOTHING;

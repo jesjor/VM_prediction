@@ -69,6 +69,45 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // VAR special predictions scoring
+    const varPreds = await pool.query('SELECT * FROM var_predictions');
+    const varTotalsRes = await pool.query(
+      "SELECT result_key, player FROM tournament_results WHERE result_key IN ('var_penalties_total','var_red_cards_total','var_goals_disallowed_total')"
+    );
+    const varTotals = {};
+    varTotalsRes.rows.forEach(r => { varTotals[r.result_key] = parseInt(r.player)||null; });
+
+    const varPredMap = {};
+    varPreds.rows.forEach(vp => { varPredMap[vp.participant_id] = vp; });
+
+    // For each VAR category: nearest guess wins 30pt, 2nd nearest 15pt
+    const varCategories = [
+      { key: 'var_penalties', totalKey: 'var_penalties_total', label: 'VAR straffespark' },
+      { key: 'var_red_cards', totalKey: 'var_red_cards_total', label: 'VAR røde kort' },
+      { key: 'var_goals_disallowed', totalKey: 'var_goals_disallowed_total', label: 'VAR annullerede mål' },
+    ];
+
+    for (const cat of varCategories) {
+      const actual = varTotals[cat.totalKey];
+      if (actual === null || actual === undefined) continue;
+
+      const ranked = data
+        .filter(p => varPredMap[p.id]?.[cat.key] !== null && varPredMap[p.id]?.[cat.key] !== undefined)
+        .map(p => ({ p, guess: parseInt(varPredMap[p.id][cat.key]), diff: Math.abs(parseInt(varPredMap[p.id][cat.key]) - actual) }))
+        .sort((a, b) => a.diff - b.diff);
+
+      if (ranked.length > 0) {
+        ranked[0].p.tournament_pts += 30;
+        ranked[0].p.total_pts += 30;
+        ranked[0].p.breakdown.push({ cat: `${cat.label} (gættet ${ranked[0].guess}, var ${actual}) 🎯 1.`, pts: 30 });
+      }
+      if (ranked.length > 1 && ranked[1].diff !== ranked[0].diff) {
+        ranked[1].p.tournament_pts += 15;
+        ranked[1].p.total_pts += 15;
+        ranked[1].p.breakdown.push({ cat: `${cat.label} (gættet ${ranked[1].guess}, var ${actual}) 2.`, pts: 15 });
+      }
+    }
+
     data.sort((a, b) => b.total_pts - a.total_pts);
     res.json(data);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
@@ -187,6 +226,14 @@ router.get('/consensus/tournament', async (req, res) => {
     items.sort((a,b)=>b.pct-a.pct);
     res.json({ total:n, items });
   } catch(err) { res.status(500).json({error:'Serverfejl'}); }
+});
+
+// GET all VAR predictions (for leaderboard)
+router.get('/var-predictions/all', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT vp.*, p.name FROM var_predictions vp JOIN participants p ON p.id=vp.participant_id');
+    res.json(r.rows);
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
 
 // ── DYNAMIC /:id ROUTES BELOW ──────────────────────────────────────────────
@@ -372,3 +419,33 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 });
 
 export default router;
+
+// ── VAR SPECIAL PREDICTIONS ───────────────────────────────────────────────
+
+// GET VAR prediction for a participant
+router.get('/:id/var-prediction', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM var_predictions WHERE participant_id=$1', [req.params.id]);
+    res.json(r.rows[0] || null);
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// PUT VAR prediction
+router.put('/:id/var-prediction', async (req, res) => {
+  const { pin, var_penalties, var_red_cards, var_goals_disallowed } = req.body;
+  try {
+    const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [req.params.id, pin]);
+    if (!part.rows.length) return res.status(401).json({ error: 'Ugyldig PIN' });
+    const lockTime = new Date('2026-06-15T21:00:00Z'); // 15. juni kl. 23:00 dansk tid
+    if (new Date() > lockTime) return res.status(403).json({ error: 'VAR-gæt er låst!' });
+    await pool.query(`
+      INSERT INTO var_predictions (participant_id, var_penalties, var_red_cards, var_goals_disallowed)
+      VALUES ($1,$2,$3,$4)
+      ON CONFLICT (participant_id) DO UPDATE SET
+        var_penalties=$2, var_red_cards=$3, var_goals_disallowed=$4, updated_at=NOW()
+    `, [req.params.id, var_penalties??null, var_red_cards??null, var_goals_disallowed??null]);
+    res.json({ ok: true });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// GET all VAR predictions (for leaderboard)

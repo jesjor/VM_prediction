@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../api'
 import MyMatches from './MyMatches.jsx'
+import VarSpecial from './VarSpecial.jsx'
 import { playerLabel, sortPlayers } from '../posLabel.js'
 
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -472,6 +473,7 @@ export default function Predict() {
         <button className={`tab-btn${tab==='tournament'?' active':''}`} onClick={()=>setTab('tournament')}>🏆 Turnering</button>
         <button className={`tab-btn${tab==='matches'?' active':''}`} onClick={()=>setTab('matches')}>⚽ Afgiv gæt</button>
         <button className={`tab-btn${tab==='mykampe'?' active':''}`} onClick={()=>setTab('mykampe')}>📊 Mine kampe</button>
+        <button className={`tab-btn${tab==='var'?' active':''}`} onClick={()=>setTab('var')}>🚨 VAR Special</button>
         <button className={`tab-btn${tab==='dreamteam'?' active':''}`} onClick={()=>setTab('dreamteam')}>🌟 VM Hold</button>
       </div>
 
@@ -572,6 +574,10 @@ export default function Predict() {
 
       {tab==='mykampe' && (
         <MyMatches participantId={participant.id} />
+      )}
+
+      {tab==='var' && (
+        <VarSpecial participant={participant} pin={pin} />
       )}
 
       {tab==='dreamteam' && (

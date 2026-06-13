@@ -690,42 +690,62 @@ function CardStats() {
   )
 }
 
-function VarPenaltyManager() {
-  const [total, setTotal] = useState('')
-  const [saved, setSaved] = useState(null)
+function VarTotalsManager() {
+  const [vals, setVals] = useState({ var_penalties: '', var_red_cards: '', var_goals_disallowed: '' })
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    api.get('/matches/stats/var-penalties').then(r => { setSaved(r.data.total); setTotal(String(r.data.total)) }).catch(()=>{})
+    api.get('/matches/stats/var-totals').then(r => {
+      setVals({
+        var_penalties: String(r.data.var_penalties ?? 0),
+        var_red_cards: String(r.data.var_red_cards ?? 0),
+        var_goals_disallowed: String(r.data.var_goals_disallowed ?? 0),
+      })
+    }).catch(()=>{})
   }, [])
 
   async function save() {
     try {
-      await api.put('/matches/stats/var-penalties', { total: parseInt(total)||0 })
-      setSaved(parseInt(total)||0)
+      await api.put('/matches/stats/var-totals', {
+        var_penalties: parseInt(vals.var_penalties)||0,
+        var_red_cards: parseInt(vals.var_red_cards)||0,
+        var_goals_disallowed: parseInt(vals.var_goals_disallowed)||0,
+      })
       setMsg('✅ Gemt!')
       setTimeout(()=>setMsg(''),3000)
     } catch { setMsg('Fejl') }
   }
 
+  const cats = [
+    { key: 'var_penalties', emoji: '⚽', label: 'VAR Straffespark' },
+    { key: 'var_red_cards', emoji: '🔴', label: 'VAR Røde Kort' },
+    { key: 'var_goals_disallowed', emoji: '🚫', label: 'VAR Annullerede Mål' },
+  ]
+
   return (
     <div className="card">
-      <div className="section-title" style={{marginTop:0}}>🚨 VAR Straffespark — Samlet antal</div>
-      <p style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>
-        Registrer det akkumulerede antal VAR-tildelte straffespark under VM. Opdater efter hver kamp hvor der tildeles et.
-        Aktuelt gemt: <strong style={{color:'var(--gold)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:20}}>{saved ?? '—'}</strong>
+      <div className="section-title" style={{marginTop:0}}>🚨 VAR Special — Opdater tællere</div>
+      <p style={{fontSize:13,color:'var(--text2)',marginBottom:12,lineHeight:1.6}}>
+        Opdater disse tællere løbende gennem turneringen. Bruges til pointberegning for deltagerne.
+        Gæt låses 15. juni kl. 23:00 dansk tid.
       </p>
-      {msg && <div className={`alert ${msg.includes('✅')?'alert-success':'alert-error'}`} style={{marginBottom:8}}>{msg}</div>}
-      <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
-        <div style={{flex:1}}>
-          <div className="form-label">Totalt antal VAR straffespark</div>
-          <input className="form-input" type="number" min="0" max="200" value={total}
-            onChange={e=>setTotal(e.target.value)}
-            style={{fontSize:24,fontWeight:800,fontFamily:"'Barlow Condensed',sans-serif",maxWidth:120,textAlign:'center'}}
-          />
-        </div>
-        <button className="btn btn-gold" onClick={save}>💾 Gem</button>
+      {msg && <div className={`alert ${msg.includes('✅')?'alert-success':'alert-error'}`} style={{marginBottom:10}}>{msg}</div>}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:12}}>
+        {cats.map(c => (
+          <div key={c.key} style={{textAlign:'center'}}>
+            <div style={{fontSize:24,marginBottom:4}}>{c.emoji}</div>
+            <div className="form-label" style={{textAlign:'center',marginBottom:6}}>{c.label}</div>
+            <input
+              className="form-input"
+              type="number" min="0" max="500"
+              value={vals[c.key]}
+              onChange={e => setVals(v => ({...v, [c.key]: e.target.value}))}
+              style={{textAlign:'center',fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800}}
+            />
+          </div>
+        ))}
       </div>
+      <button className="btn btn-gold btn-full" onClick={save}>💾 Gem alle VAR-tællere</button>
     </div>
   )
 }
@@ -809,9 +829,9 @@ export default function AdminDashboard() {
       {tab==='var' && (
         <div>
           <div className="alert alert-info" style={{fontSize:13,marginBottom:12}}>
-            Opdater det totale antal VAR-tildelte straffespark under VM løbende. Bruges til pointberegning.
+            Opdater VAR-tællerne løbende. Pointberegning kører automatisk.
           </div>
-          <VarPenaltyManager />
+          <VarTotalsManager />
         </div>
       )}
 

@@ -380,3 +380,36 @@ router.put('/stats/var-penalties', requireAdmin, async (req, res) => {
     res.json({ ok: true, total });
   } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
+
+// GET all VAR totals
+router.get('/stats/var-totals', async (req, res) => {
+  try {
+    const keys = ['var_penalties_total','var_red_cards_total','var_goals_disallowed_total'];
+    const r = await pool.query('SELECT result_key, player FROM tournament_results WHERE result_key = ANY($1)', [keys]);
+    const out = {};
+    r.rows.forEach(row => { out[row.result_key] = parseInt(row.player)||0; });
+    res.json({
+      var_penalties: out['var_penalties_total'] ?? 0,
+      var_red_cards: out['var_red_cards_total'] ?? 0,
+      var_goals_disallowed: out['var_goals_disallowed_total'] ?? 0,
+    });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// PUT all VAR totals (admin)
+router.put('/stats/var-totals', requireAdmin, async (req, res) => {
+  const { var_penalties, var_red_cards, var_goals_disallowed } = req.body;
+  try {
+    for (const [key, val] of [
+      ['var_penalties_total', var_penalties],
+      ['var_red_cards_total', var_red_cards],
+      ['var_goals_disallowed_total', var_goals_disallowed],
+    ]) {
+      if (val !== undefined && val !== null) {
+        await pool.query(`INSERT INTO tournament_results (result_key, player) VALUES ($1,$2)
+          ON CONFLICT (result_key) DO UPDATE SET player=$2, updated_at=NOW()`, [key, String(val)]);
+      }
+    }
+    res.json({ ok: true });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
