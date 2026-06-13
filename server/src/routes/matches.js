@@ -209,7 +209,6 @@ router.get('/:id/participants', async (req, res) => {
   } catch(err) { console.error(err); res.status(500).json({error:'Serverfejl'}); }
 });
 
-export default router;
 
 // GET live match data from API-Football to pre-fill admin form
 router.get('/:id/livefetch', requireAdmin, async (req, res) => {
@@ -217,149 +216,129 @@ router.get('/:id/livefetch', requireAdmin, async (req, res) => {
   if (!apiKey) return res.status(503).json({ error: 'RAPIDAPI_KEY ikke sat i Railway environment variables' });
 
   try {
-    const match = await pool.query('SELECT * FROM matches WHERE id=$1', [req.params.id]);
-    if (!match.rows.length) return res.status(404).json({ error: 'Kamp ikke fundet' });
-    const m = match.rows[0];
+    const matchRow = await pool.query('SELECT * FROM matches WHERE id=$1', [req.params.id]);
+    if (!matchRow.rows.length) return res.status(404).json({ error: 'Kamp ikke fundet' });
+    const m = matchRow.rows[0];
 
-    // Format date from kickoff
     const date = new Date(m.kickoff).toISOString().split('T')[0];
     const home = m.home_team, away = m.away_team;
-    if (!home || !away) return res.status(400).json({ error: 'Hold-navne mangler — sæt dem manuelt først' });
+    if (!home || !away) return res.status(400).json({ error: 'Holdnavne mangler — sæt dem manuelt først' });
 
-    // Search for fixture on API-Football (direct api-sports.io endpoint)
-    const searchUrl = `https://v3.football.api-sports.io/fixtures?date=${date}&league=1&season=2026`;
-    const searchResp = await fetch(searchUrl, {
-      headers: {
-        'x-apisports-key': apiKey,
-      }
-    });
-    const searchData = await searchResp.json();
-
-    if (!searchData.response?.length) {
-      return res.status(404).json({ error: `Ingen kampe fundet på API-Football for ${date}. VM league ID=1. Prøv igen når kampen er startet.` });
-    }
-
-    // Find matching fixture by team names (fuzzy)
     const homeLow = home.toLowerCase().replace(/[^a-z]/g, '');
     const awayLow = away.toLowerCase().replace(/[^a-z]/g, '');
 
-    let fixture = searchData.response.find(f => {
-      const fHome = f.teams.home.name.toLowerCase().replace(/[^a-z]/g, '');
-      const fAway = f.teams.away.name.toLowerCase().replace(/[^a-z]/g, '');
-      return (fHome.includes(homeLow) || homeLow.includes(fHome)) &&
-             (fAway.includes(awayLow) || awayLow.includes(fAway));
-    });
+    // Fetch from API-Football
+    const url = `https://v3.football.api-sports.io/fixtures?date=${date}&league=1&season=2026`;
+    const resp = await fetch(url, { headers: { 'x-apisports-key': apiKey } });
+    const data = await resp.json();
 
-    // Also try reversed (in case home/away is swapped)
-    if (!fixture) {
-      fixture = searchData.response.find(f => {
-        const fHome = f.teams.home.name.toLowerCase().replace(/[^a-z]/g, '');
-        const fAway = f.teams.away.name.toLowerCase().replace(/[^a-z]/g, '');
-        return (fHome.includes(awayLow) || awayLow.includes(fHome)) &&
-               (fAway.includes(homeLow) || homeLow.includes(fAway));
+    console.log('[livefetch] status:', resp.status, 'errors:', JSON.stringify(data.errors), 'results:', data.results);
+
+    // Check for API errors
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      return res.status(403).json({ error: `API-Football fejl: ${JSON.stringify(data.errors)}. Tjek at din nøgle er korrekt på dashboard.api-football.com` });
+    }
+
+    let fixtures = data.response || [];
+
+    // If no results, try without league filter (helps with free plan limits)
+    if (fixtures.length === 0) {
+      const resp2 = await fetch(`https://v3.football.api-sports.io/fixtures?date=${date}`, { headers: { 'x-apisports-key': apiKey } });
+      const data2 = await resp2.json();
+      console.log('[livefetch fallback] results:', data2.results);
+      fixtures = (data2.response || []).filter(f => f.league?.id === 1 || f.league?.name?.toLowerCase().includes('world cup'));
+    }
+
+    if (fixtures.length === 0) {
+      return res.status(404).json({
+        error: `Ingen VM-kampe fundet for ${date}. Mulige årsager: 1) Din gratis plan dækker ikke VM-data, 2) Kampen er ikke registreret endnu, 3) Forkert dato. Tjek dashboard.api-football.com for at bekræfte adgang til league ID=1, season=2026.`
       });
     }
 
+    // Find matching fixture by team names (fuzzy match)
+    let fixture = fixtures.find(f => {
+      const fh = f.teams.home.name.toLowerCase().replace(/[^a-z]/g, '');
+      const fa = f.teams.away.name.toLowerCase().replace(/[^a-z]/g, '');
+      return (fh.includes(homeLow) || homeLow.includes(fh)) && (fa.includes(awayLow) || awayLow.includes(fa));
+    }) || fixtures.find(f => {
+      // Try reversed home/away
+      const fh = f.teams.home.name.toLowerCase().replace(/[^a-z]/g, '');
+      const fa = f.teams.away.name.toLowerCase().replace(/[^a-z]/g, '');
+      return (fh.includes(awayLow) || awayLow.includes(fh)) && (fa.includes(homeLow) || homeLow.includes(fa));
+    });
+
     if (!fixture) {
-      const available = searchData.response.map(f => `${f.teams.home.name} vs ${f.teams.away.name}`).join(', ');
+      const available = fixtures.map(f => `${f.teams.home.name} vs ${f.teams.away.name}`).join(', ');
       return res.status(404).json({
-        error: `Kamp ikke fundet. Tilgængelige kampe ${date}: ${available}`,
-        available: searchData.response.map(f => ({ home: f.teams.home.name, away: f.teams.away.name, id: f.fixture.id }))
+        error: `Kamp "${home} vs ${away}" ikke fundet. Tilgængelige kampe ${date}: ${available}`,
+        available: fixtures.map(f => ({ home: f.teams.home.name, away: f.teams.away.name, id: f.fixture.id }))
       });
     }
 
     const fixtureId = fixture.fixture.id;
 
-    // Fetch detailed events
-    const eventsUrl = `https://v3.football.api-sports.io/fixtures?id=${fixtureId}`;
-    const eventsResp = await fetch(eventsUrl, {
-      headers: { 'x-apisports-key': apiKey }
-    });
-    const eventsData = await eventsResp.json();
-    const fix = eventsData.response?.[0];
-    if (!fix) return res.status(404).json({ error: 'Ingen detaljer fundet' });
+    // Fetch full fixture details with events
+    const detailResp = await fetch(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`, { headers: { 'x-apisports-key': apiKey } });
+    const detailData = await detailResp.json();
+    const fix = detailData.response?.[0];
+    if (!fix) return res.status(404).json({ error: 'Ingen detaljer fundet for kamp ID ' + fixtureId });
 
-    const status = fix.fixture.status.short; // FT, HT, 1H, 2H, NS etc
+    const status = fix.fixture.status.short;
     const homeScore = fix.goals.home ?? 0;
     const awayScore = fix.goals.away ?? 0;
 
-    // Map events
-    const events = (fix.events || []).map(e => {
+    // Map events to our format
+    const rawEvents = (fix.events || []).map(e => {
       let event_type = null;
-      if (e.type === 'Goal') {
-        event_type = e.detail === 'Own Goal' ? 'own_goal' : 'goal';
-      } else if (e.type === 'Card') {
+      if (e.type === 'Goal') event_type = e.detail === 'Own Goal' ? 'own_goal' : 'goal';
+      else if (e.type === 'Card') {
         if (e.detail === 'Yellow Card') event_type = 'yellow';
         else if (e.detail === 'Red Card') event_type = 'red';
         else if (e.detail === 'Yellow Red Card') event_type = 'yellow_red';
       }
       if (!event_type) return null;
-
       const isHome = e.team.id === fix.teams.home.id;
-      const ourTeam = isHome ? home : away;
-      const playerName = e.player?.name || '';
-      const assistName = e.assist?.name || '';
-
       return {
         event_type,
         minute: e.time.elapsed,
-        api_team: e.team.name,
-        our_team: ourTeam,
-        api_player: playerName,
-        api_assist: assistName || null,
-        player: playerName,      // will be matched to our squad
-        assist_player: assistName || null,
+        our_team: isHome ? home : away,
+        api_player: e.player?.name || '',
+        api_assist: e.assist?.name || null,
       };
     }).filter(Boolean);
 
-    // Fetch squads to do name matching
-    const squads = await pool.query('SELECT player, team FROM squads WHERE team IN ($1,$2)', [home, away]);
+    // Fetch our squads for name matching
+    const squadsRes = await pool.query('SELECT player, team FROM squads WHERE team = ANY($1)', [[home, away]]);
     const squadMap = {};
-    squads.rows.forEach(s => {
-      if (!squadMap[s.team]) squadMap[s.team] = [];
-      squadMap[s.team].push(s.player);
-    });
+    squadsRes.rows.forEach(s => { if (!squadMap[s.team]) squadMap[s.team] = []; squadMap[s.team].push(s.player); });
 
-    // Try to match API player names to our squad names
     function matchPlayer(apiName, teamPlayers) {
       if (!apiName || !teamPlayers?.length) return { matched: null, confidence: 0 };
-      const apiLow = apiName.toLowerCase().replace(/[^a-z ]/g, '');
-
-      // Exact match
-      const exact = teamPlayers.find(p => p.toLowerCase() === apiLow);
+      const al = apiName.toLowerCase().replace(/[^a-z ]/g, '');
+      const exact = teamPlayers.find(p => p.toLowerCase() === al);
       if (exact) return { matched: exact, confidence: 1 };
-
-      // Last name match
-      const apiLast = apiLow.split(' ').pop();
-      const lastMatch = teamPlayers.find(p => p.toLowerCase().split(' ').pop() === apiLast);
+      const aLast = al.split(' ').pop();
+      const lastMatch = teamPlayers.find(p => p.toLowerCase().split(' ').pop() === aLast);
       if (lastMatch) return { matched: lastMatch, confidence: 0.8 };
-
-      // Partial match (one name word matches)
-      const apiWords = apiLow.split(' ').filter(w => w.length > 2);
-      const partial = teamPlayers.find(p => {
-        const pWords = p.toLowerCase().split(' ');
-        return apiWords.some(w => pWords.some(pw => pw.includes(w) || w.includes(pw)));
-      });
+      const words = al.split(' ').filter(w => w.length > 2);
+      const partial = teamPlayers.find(p => words.some(w => p.toLowerCase().split(' ').some(pw => pw.includes(w) || w.includes(pw))));
       if (partial) return { matched: partial, confidence: 0.5 };
-
       return { matched: null, confidence: 0 };
     }
 
-    // Enrich events with squad matching
-    const enrichedEvents = events.map(ev => {
-      const teamPlayers = squadMap[ev.our_team] || [];
-      const playerMatch = matchPlayer(ev.api_player, teamPlayers);
-      const assistMatch = ev.api_assist ? matchPlayer(ev.api_assist, teamPlayers) : { matched: null, confidence: 0 };
-
+    const events = rawEvents.map(ev => {
+      const tp = squadMap[ev.our_team] || [];
+      const pm = matchPlayer(ev.api_player, tp);
+      const am = ev.api_assist ? matchPlayer(ev.api_assist, tp) : { matched: null, confidence: 0 };
       return {
         ...ev,
-        player: playerMatch.matched || ev.api_player,
-        player_confidence: playerMatch.confidence,
-        player_unmatched: playerMatch.confidence < 0.5,
-        assist_player: assistMatch.matched || ev.api_assist || null,
-        assist_confidence: assistMatch.confidence,
-        assist_unmatched: ev.api_assist && assistMatch.confidence < 0.5,
-        team_players: teamPlayers,
+        player: pm.matched || ev.api_player,
+        player_confidence: pm.confidence,
+        player_unmatched: pm.confidence < 0.5,
+        assist_player: am.matched || ev.api_assist || null,
+        assist_confidence: am.confidence,
+        assist_unmatched: !!ev.api_assist && am.confidence < 0.5,
+        team_players: tp,
       };
     });
 
@@ -371,11 +350,13 @@ router.get('/:id/livefetch', requireAdmin, async (req, res) => {
       finished: ['FT','AET','PEN'].includes(status),
       api_home: fix.teams.home.name,
       api_away: fix.teams.away.name,
-      events: enrichedEvents,
+      events,
     });
 
   } catch (err) {
-    console.error('livefetch error:', err);
-    res.status(500).json({ error: err.message || 'Fejl ved API-opkald' });
+    console.error('[livefetch error]', err);
+    res.status(500).json({ error: err.message || 'Serverfejl ved API-opkald' });
   }
 });
+
+export default router;
