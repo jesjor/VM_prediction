@@ -7,6 +7,7 @@ import Stats from './pages/Stats.jsx'
 import Bracket from './pages/Bracket.jsx'
 import Profile from './pages/Profile.jsx'
 import HeadToHead from './pages/HeadToHead.jsx'
+import Quiz from './pages/Quiz.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import NavBadge from './components/NavBadge.jsx'
@@ -52,6 +53,7 @@ export default function App() {
             ))}
             <NavLink to="/bracket" className={({isActive})=>`nav-link${isActive?' active':''}`}>Bracket</NavLink>
             <NavLink to="/h2h" className={({isActive})=>`nav-link${isActive?' active':''}`}>H2H</NavLink>
+            <NavLink to="/quiz" className={({isActive})=>`nav-link${isActive?' active':''}`}>⚽ Quiz</NavLink>
             {isAdmin
               ? <><NavLink to="/admin" className={({isActive})=>`nav-link admin-link${isActive?' active':''}`}>Admin</NavLink>
                   <button onClick={logout} className="btn btn-sm" style={{marginLeft:'auto'}}>Log ud</button></>
@@ -70,6 +72,7 @@ export default function App() {
           <Route path="/regler"      element={<Rules />} />
           <Route path="/bracket"     element={<Bracket />} />
           <Route path="/h2h"         element={<HeadToHead />} />
+          <Route path="/quiz"        element={<Quiz />} />
           <Route path="/profil/:id"  element={<Profile />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin"       element={<AdminDashboard />} />
