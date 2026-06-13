@@ -236,6 +236,26 @@ router.get('/var-predictions/all', async (req, res) => {
   } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
 
+// GET quiz leaderboard (all participants) — STATIC, must be before /:id
+router.get('/quiz-scores/leaderboard', async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT p.id, p.name,
+        COALESCE(SUM(qs.score), 0) as total_score,
+        COALESCE(SUM(qs.total), 0) as total_possible,
+        COUNT(qs.category) as categories_played,
+        json_agg(json_build_object('category', qs.category, 'score', qs.score, 'total', qs.total) ORDER BY qs.category) 
+          FILTER (WHERE qs.category IS NOT NULL) as cat_scores
+      FROM participants p
+      LEFT JOIN quiz_scores qs ON qs.participant_id = p.id
+      GROUP BY p.id, p.name
+      HAVING COUNT(qs.category) > 0
+      ORDER BY total_score DESC, categories_played DESC
+    `);
+    res.json(r.rows);
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
 // ── DYNAMIC /:id ROUTES BELOW ──────────────────────────────────────────────
 
 router.get('/:id/tournament-prediction', async (req, res) => {
@@ -449,3 +469,52 @@ router.put('/:id/var-prediction', async (req, res) => {
 });
 
 // GET all VAR predictions (for leaderboard)
+
+// ── QUIZ SCORES ───────────────────────────────────────────────────────────
+
+// GET quiz scores for a participant
+router.get('/:id/quiz-scores', async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT * FROM quiz_scores WHERE participant_id=$1 ORDER BY category',
+      [req.params.id]
+    );
+    res.json(r.rows);
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// PUT quiz score (only saves if better than previous)
+router.put('/:id/quiz-scores/:category', async (req, res) => {
+  const { pin, score, total } = req.body;
+  try {
+    const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [req.params.id, pin]);
+    if (!part.rows.length) return res.status(401).json({ error: 'Ugyldig PIN' });
+
+    // Check if already completed
+    const existing = await pool.query('SELECT id, completed_once FROM quiz_scores WHERE participant_id=$1 AND category=$2', [req.params.id, req.params.category]);
+
+    if (existing.rows.length && existing.rows[0].completed_once) {
+      // Already completed — do NOT update score (points already awarded)
+      return res.json({ ok: true, alreadyCompleted: true, message: 'Quiz allerede gennemført — ingen nye point.' });
+    }
+
+    // First time completion — save score and mark as completed
+    await pool.query(`
+      INSERT INTO quiz_scores (participant_id, category, score, total, played_at, completed_once)
+      VALUES ($1,$2,$3,$4,NOW(),TRUE)
+      ON CONFLICT (participant_id, category) DO UPDATE SET
+        score = EXCLUDED.score,
+        total = EXCLUDED.total,
+        played_at = NOW(),
+        completed_once = TRUE
+    `, [req.params.id, req.params.category, score, total]);
+
+    res.json({ ok: true, alreadyCompleted: false });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// GET quiz leaderboard (all participants)
+    `);
+    res.json(r.rows);
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});

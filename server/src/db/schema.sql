@@ -261,3 +261,20 @@ CREATE TABLE IF NOT EXISTS var_predictions (
 -- VAR actual results
 INSERT INTO tournament_results (result_key, player) VALUES ('var_red_cards_total', '0') ON CONFLICT (result_key) DO NOTHING;
 INSERT INTO tournament_results (result_key, player) VALUES ('var_goals_disallowed_total', '0') ON CONFLICT (result_key) DO NOTHING;
+
+-- Quiz scores table
+CREATE TABLE IF NOT EXISTS quiz_scores (
+  id SERIAL PRIMARY KEY,
+  participant_id INTEGER REFERENCES participants(id) ON DELETE CASCADE,
+  category VARCHAR(20) NOT NULL,
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  played_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(participant_id, category)
+);
+
+-- Track whether quiz was completed (for point-lock)
+DO $$ BEGIN
+  ALTER TABLE quiz_scores ADD COLUMN IF NOT EXISTS completed_once BOOLEAN DEFAULT TRUE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;

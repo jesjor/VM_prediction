@@ -31,6 +31,7 @@ export default function Profile() {
   const [data, setData] = useState(null)
   const [matches, setMatches] = useState([])
   const [pStats, setPStats] = useState(null)
+  const [varPred, setVarPred] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('tournament')
 
@@ -39,10 +40,12 @@ export default function Profile() {
       api.get(`/participants/${id}/profile`),
       api.get('/matches'),
       api.get(`/participants/${id}/personal-stats`),
-    ]).then(([p, m, s]) => {
+      api.get(`/participants/${id}/var-prediction`),
+    ]).then(([p, m, s, v]) => {
       setData(p.data)
       setMatches(m.data)
       setPStats(s.data)
+      setVarPred(v.data)
       setLoading(false)
     }).catch(() => { setLoading(false); navigate('/') })
   }, [id])
@@ -70,9 +73,35 @@ export default function Profile() {
       <div className="tabs">
         <button className={`tab-btn${tab==='tournament'?' active':''}`} onClick={()=>setTab('tournament')}>🏆 Turneringsgæt</button>
         <button className={`tab-btn${tab==='stats'?' active':''}`} onClick={()=>setTab('stats')}>📊 Statistik</button>
+        <button className={`tab-btn${tab==='var'?' active':''}`} onClick={()=>setTab('var')}>🚨 VAR Special</button>
         <button className={`tab-btn${tab==='matches'?' active':''}`} onClick={()=>setTab('matches')}>⚽ Kampgæt</button>
         <button className={`tab-btn${tab==='dreamteam'?' active':''}`} onClick={()=>setTab('dreamteam')}>🌟 VM Hold</button>
       </div>
+
+      {tab==='var' && (
+        <div className="card">
+          <div className="section-title" style={{marginTop:0}}>🚨 VAR Special — Gæt</div>
+          {!varPred ? (
+            <div className="empty">Ingen VAR-gæt afgivet endnu.</div>
+          ) : (
+            <div>
+              {[
+                { key: 'var_penalties', emoji: '⚽', label: 'VAR Straffespark' },
+                { key: 'var_red_cards', emoji: '🔴', label: 'VAR Røde Kort' },
+                { key: 'var_goals_disallowed', emoji: '🚫', label: 'VAR Annullerede Mål' },
+              ].map(c => (
+                <div key={c.key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+                  <span style={{fontSize:14,color:'var(--text2)'}}>{c.emoji} {c.label}</span>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:'var(--gold)'}}>
+                    {varPred[c.key] !== null && varPred[c.key] !== undefined ? varPred[c.key] : '—'}
+                  </span>
+                </div>
+              ))}
+              <div style={{fontSize:12,color:'var(--text3)',marginTop:8}}>Nærmest-vinder pr. kategori: 30 pt · 2. plads: 15 pt</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* TOURNAMENT TAB */}
       {tab==='tournament' && (
