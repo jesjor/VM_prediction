@@ -438,7 +438,6 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
 
-export default router;
 
 // ── VAR SPECIAL PREDICTIONS ───────────────────────────────────────────────
 
@@ -513,8 +512,5 @@ router.put('/:id/quiz-scores/:category', async (req, res) => {
   } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
 
-// GET quiz leaderboard (all participants)
-    `);
-    res.json(r.rows);
-  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
-});
+
+export default router;
