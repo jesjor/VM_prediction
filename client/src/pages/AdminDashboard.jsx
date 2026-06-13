@@ -82,7 +82,6 @@ function MatchEditor({ match, squads, onSave }) {
   const [mvpPlayer, setMvpPlayer] = useState(match.match_mvp_player||'')
   const [msg, setMsg] = useState('')
   const [saving, setSaving] = useState(false)
-  const [fetching, setFetching] = useState(false)
   const [fetchWarnings, setFetchWarnings] = useState([])
 
   const home = homeTeam || match.home_team || match.home_slot || '?'
@@ -90,39 +89,6 @@ function MatchEditor({ match, squads, onSave }) {
   const preview = calcPreviewScore(events, home, away)
   const isKnockout = match.round !== 'GROUP'
   const mvpPlayers = mvpTeam && squads[mvpTeam] ? sortPlayers(squads[mvpTeam]) : []
-
-  async function liveFetch() {
-    if (home==='?' || away==='?') return setMsg('Sæt holdnavne først')
-    setFetching(true); setMsg(''); setFetchWarnings([])
-    try {
-      const r = await api.get(`/matches/${match.id}/livefetch`)
-      const d = r.data
-      const mapped = d.events.map(ev => ({
-        event_type: ev.event_type,
-        minute: ev.minute,
-        team: ev.our_team,
-        player: ev.player,
-        assist_player: ev.assist_player || null,
-        _api_player: ev.api_player,
-        _unmatched: ev.player_unmatched,
-        _assist_unmatched: ev.assist_unmatched,
-        _api_assist: ev.api_assist,
-        _team_players: ev.team_players,
-      }))
-      setEvents(mapped)
-      if (d.finished) setStatus('finished')
-      else if (['1H','2H','HT'].includes(d.status)) setStatus('live')
-      const warnings = mapped.filter(ev => ev._unmatched || ev._assist_unmatched)
-        .map(ev => ev._unmatched
-          ? `Min ${ev.minute}: "${ev._api_player}" → hold ${ev.team} — vælg korrekt spiller`
-          : `Min ${ev.minute}: Assist "${ev._api_assist}" → hold ${ev.team} — vælg korrekt spiller`)
-      setFetchWarnings(warnings)
-      setMsg(`✅ Hentet! ${d.api_home} ${d.home_score}-${d.away_score} ${d.api_away}${warnings.length ? ` · ${warnings.length} navne kræver bekræftelse` : ''}`)
-    } catch(e) {
-      setMsg('❌ ' + (e.response?.data?.error || e.message || 'Fejl'))
-    }
-    setFetching(false)
-  }
 
   // ── LIVESCORE PASTE PARSER ─────────────────────────────────────────────
   const [pasteText, setPasteText] = useState('')
@@ -138,7 +104,7 @@ function MatchEditor({ match, squads, onSave }) {
       return { name, isVAR }
     }
 
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean)
     const parsed = []
     let currentScore = { home: 0, away: 0 }
     let i = 0
@@ -156,8 +122,8 @@ function MatchEditor({ match, squads, onSave }) {
       return m ? { home: parseInt(m[1]), away: parseInt(m[2]) } : null
     }
 
-    while (i < lines.length) {
-      const line = lines[i]
+    while (i < rawLines.length) {
+      const line = rawLines[i]
 
       if (isIgnored(line)) { i++; continue }
       if (isScore(line))   { currentScore = parseScore(line); i++; continue }
@@ -169,12 +135,12 @@ function MatchEditor({ match, squads, onSave }) {
         let isVarPen = false
         // Collect block: score before player, then player line(s)
         let preScore = null
-        if (i < lines.length && isScore(lines[i])) { preScore = parseScore(lines[i]); i++ }
+        if (i < rawLines.length && isScore(rawLines[i])) { preScore = parseScore(rawLines[i]); i++ }
         const block = []
-        while (i < lines.length && !isMinute(lines[i]) && !isScore(lines[i]) && !isIgnored(lines[i]) && !isPen(lines[i])) {
-          block.push(lines[i]); i++
+        while (i < rawLines.length && !isMinute(rawLines[i]) && !isScore(rawLines[i]) && !isIgnored(rawLines[i]) && !isPen(rawLines[i])) {
+          block.push(rawLines[i]); i++
         }
-        const postScore = i < lines.length && isScore(lines[i]) ? parseScore(lines[i]) : null
+        const postScore = i < rawLines.length && isScore(rawLines[i]) ? parseScore(rawLines[i]) : null
         if (postScore) i++
         const nextScore = preScore || postScore
         if (!block.length) { if (nextScore) currentScore = nextScore; continue }
@@ -203,18 +169,18 @@ function MatchEditor({ match, squads, onSave }) {
 
         // Check if next lines indicate a PEN before the player block
         let isPenaltyNext = false
-        if (i < lines.length && isPen(lines[i])) { isPenaltyNext = true; i++ }
+        if (i < rawLines.length && isPen(rawLines[i])) { isPenaltyNext = true; i++ }
 
         // Score before player
         let preScore = null
-        if (i < lines.length && isScore(lines[i])) { preScore = parseScore(lines[i]); i++ }
+        if (i < rawLines.length && isScore(rawLines[i])) { preScore = parseScore(rawLines[i]); i++ }
 
         const block = []
-        while (i < lines.length && !isMinute(lines[i]) && !isScore(lines[i]) && !isIgnored(lines[i]) && !isPen(lines[i])) {
-          block.push(lines[i]); i++
+        while (i < rawLines.length && !isMinute(rawLines[i]) && !isScore(rawLines[i]) && !isIgnored(rawLines[i]) && !isPen(rawLines[i])) {
+          block.push(rawLines[i]); i++
         }
 
-        const postScore = i < lines.length && isScore(lines[i]) ? parseScore(lines[i]) : null
+        const postScore = i < rawLines.length && isScore(rawLines[i]) ? parseScore(rawLines[i]) : null
         if (postScore) i++
         const nextScore = preScore || postScore
 
@@ -429,17 +395,12 @@ function MatchEditor({ match, squads, onSave }) {
         <div style={{marginTop:12,borderTop:'1px solid var(--border)',paddingTop:12}}>
           {msg && <div className={`alert ${msg.includes('✅')?'alert-success':'alert-error'}`} style={{marginBottom:8}}>{msg}</div>}
 
-          {/* Live fetch button */}
+          {/* Paste parser button */}
           {home!=='?' && away!=='?' && (
             <div style={{marginBottom:12}}>
-              <div style={{display:'flex',gap:8,marginBottom:6}}>
-                <button className="btn btn-primary" style={{flex:1}} onClick={liveFetch} disabled={fetching}>
-                  {fetching ? '📡 Henter...' : '📡 Hent fra API (kræver betalt plan)'}
-                </button>
-                <button className="btn btn-gold" style={{flex:1}} onClick={()=>setShowPaste(p=>!p)}>
-                  📋 {showPaste ? 'Luk' : 'Indsæt fra livescore.com'}
-                </button>
-              </div>
+              <button className="btn btn-gold btn-full" onClick={()=>setShowPaste(p=>!p)}>
+                📋 {showPaste ? 'Luk' : 'Indsæt fra livescore.com'}
+              </button>
 
               {showPaste && (
                 <div style={{background:'var(--bg3)',borderRadius:8,padding:10,marginBottom:8}}>

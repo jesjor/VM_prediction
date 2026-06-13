@@ -96,31 +96,52 @@ export default function Leaderboard() {
             ? <div className="card empty">Ingen deltagere endnu. Tilmeld dig under "Mine gæt"!</div>
             : <div className="card" style={{padding:'0 1rem'}}>
                 {data.map((p,i)=>(
-                  <div key={p.id}>
-                    <div className="lb-row" style={{cursor:'pointer'}} onClick={()=>setExpanded(expanded===p.id?null:p.id)}>
+                  <div key={p.id} style={{borderBottom:'1px solid var(--border)'}}>
+                    <div className="lb-row">
                       <div className={`lb-rank${i<3?` r${i+1}`:''}`}>{i<3?RANK_ICONS[i]:i+1}</div>
                       <div className="lb-avatar" style={{background:getColor(p.name)}}>{initials(p.name)}</div>
-                      <div className="lb-name" onClick={e=>{e.stopPropagation();navigate(`/profil/${p.id}`)}} style={{cursor:'pointer'}}>
-                        {p.name} <span style={{fontSize:11,color:'var(--text3)'}}>→</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:600,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                        <div style={{display:'flex',gap:6,marginTop:3,flexWrap:'wrap'}}>
+                          <span className="badge badge-blue" style={{fontSize:10}}>{p.match_pts} kamp</span>
+                          <span className="badge badge-gold" style={{fontSize:10}}>{p.tournament_pts} turnering</span>
+                          {p.dream_team_pts>0&&<span className="badge badge-green" style={{fontSize:10}}>{p.dream_team_pts} VM hold</span>}
+                        </div>
                       </div>
-                      <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2}}>
-                        <div className="lb-pts-big">{p.total_pts}</div>
-                        <div className="lb-pts-label">point</div>
+                      <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                        <div style={{textAlign:'right'}}>
+                          <div className="lb-pts-big">{p.total_pts}</div>
+                          <div className="lb-pts-label">point</div>
+                        </div>
+                        <button
+                          onClick={()=>navigate(`/profil/${p.id}`)}
+                          style={{background:'var(--bg3)',border:'1px solid var(--border2)',borderRadius:6,padding:'5px 9px',cursor:'pointer',color:'var(--text2)',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}
+                          title="Se profil og alle gæt"
+                        >👤 Profil</button>
+                        <button
+                          onClick={()=>setExpanded(expanded===p.id?null:p.id)}
+                          style={{background:'var(--bg3)',border:'1px solid var(--border2)',borderRadius:6,padding:'5px 9px',cursor:'pointer',color:'var(--text2)',fontSize:12,fontWeight:600,minWidth:36}}
+                          title="Vis point-breakdown"
+                        >{expanded===p.id?'▲':'▼'}</button>
                       </div>
                     </div>
                     {expanded===p.id&&(
-                      <div style={{padding:'.5rem 0 .75rem 44px'}}>
-                        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
-                          <span className="badge badge-blue">{p.match_pts} kamp</span>
-                          <span className="badge badge-gold">{p.tournament_pts} turnering</span>
-                          {p.dream_team_pts>0&&<span className="badge badge-green">{p.dream_team_pts} VM hold</span>}
-                        </div>
-                        {p.breakdown?.slice(0,8).map((b,j)=>(
-                          <div key={j} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'2px 0',color:'var(--text2)'}}>
-                            <span>{b.cat}</span><span style={{color:'var(--gold)',fontWeight:600,marginLeft:8}}>+{b.pts}</span>
+                      <div style={{padding:'.5rem 1rem .75rem',background:'var(--bg3)'}}>
+                        <div style={{fontSize:12,color:'var(--text3)',fontWeight:600,marginBottom:6,textTransform:'uppercase',letterSpacing:.5}}>Point fra</div>
+                        {p.breakdown?.length===0
+                          ? <div style={{fontSize:13,color:'var(--text3)'}}>Ingen point endnu.</div>
+                          : p.breakdown.slice(0,10).map((b,j)=>(
+                            <div key={j} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'3px 0',borderBottom:'1px solid var(--border)',color:'var(--text2)'}}>
+                              <span>{b.cat}</span>
+                              <span style={{color:'var(--gold)',fontWeight:700,marginLeft:12,flexShrink:0}}>+{b.pts}</span>
+                            </div>
+                          ))
+                        }
+                        {p.breakdown?.length>10&&(
+                          <div style={{fontSize:12,color:'var(--text3)',marginTop:4,textAlign:'center'}}>
+                            ...og {p.breakdown.length-10} mere — <span style={{color:'var(--blue)',cursor:'pointer'}} onClick={()=>navigate(`/profil/${p.id}`)}>se fuld profil</span>
                           </div>
-                        ))}
-                        {p.breakdown?.length>8&&<div style={{fontSize:12,color:'var(--text3)',marginTop:4}}>...og {p.breakdown.length-8} mere</div>}
+                        )}
                       </div>
                     )}
                   </div>

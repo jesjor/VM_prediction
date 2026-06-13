@@ -250,7 +250,7 @@ router.put('/:id/tournament-prediction', async (req, res) => {
   try {
     const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [req.params.id, pin]);
     if (!part.rows.length) return res.status(401).json({ error: 'Ugyldig PIN' });
-    const lockTime = new Date('2026-06-15T21:00:00Z'); // 15. juni kl. 23:00 dansk tid
+    const lockTime = new Date('2026-06-22T21:59:00Z'); // 22. juni kl. 23:59 dansk tid — alle hold har spillet 1 kamp
     if (new Date() > lockTime) return res.status(403).json({ error: 'Turneringsgæt er låst!' });
     const existing = await pool.query('SELECT id FROM tournament_predictions WHERE participant_id=$1', [req.params.id]);
     const params = buildParams(prediction, req.params.id);
@@ -436,7 +436,7 @@ router.put('/:id/var-prediction', async (req, res) => {
   try {
     const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [req.params.id, pin]);
     if (!part.rows.length) return res.status(401).json({ error: 'Ugyldig PIN' });
-    const lockTime = new Date('2026-06-15T21:00:00Z'); // 15. juni kl. 23:00 dansk tid
+    const lockTime = new Date('2026-06-22T21:59:00Z'); // 22. juni kl. 23:59 dansk tid — alle hold har spillet 1 kamp
     if (new Date() > lockTime) return res.status(403).json({ error: 'VAR-gæt er låst!' });
     await pool.query(`
       INSERT INTO var_predictions (participant_id, var_penalties, var_red_cards, var_goals_disallowed)

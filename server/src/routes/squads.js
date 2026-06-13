@@ -66,7 +66,7 @@ router.put('/dream-team/:participantId', async (req, res) => {
   try {
     const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [req.params.participantId, pin]);
     if (!part.rows.length) return res.status(401).json({ error: 'Ugyldig PIN' });
-    const lockTime = new Date('2026-06-11T18:45:00Z');
+    const lockTime = new Date('2026-06-22T21:59:00Z');
     if (new Date() > lockTime) return res.status(403).json({ error: 'VM Hold-gæt er låst!' });
     if (!Array.isArray(players) || players.length > 11) return res.status(400).json({ error: 'Maks 11 spillere' });
     await pool.query(`

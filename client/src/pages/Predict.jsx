@@ -243,7 +243,7 @@ function DreamTeamPicker({ participantId, pin, squads }) {
   const [addPlayer, setAddPlayer] = useState('')
   const [msg, setMsg] = useState('')
   const [saving, setSaving] = useState(false)
-  const locked = new Date() > new Date('2026-06-11T18:45:00Z')
+  const locked = new Date() > new Date('2026-06-22T21:59:00Z')
 
   useEffect(() => {
     api.get(`/squads/dream-team/${participantId}`).then(r => {
@@ -442,7 +442,7 @@ export default function Predict() {
     </div>
   )
 
-  const tournLocked = new Date() > new Date('2026-06-11T18:45:00Z')
+  const tournLocked = new Date() > new Date('2026-06-22T21:59:00Z')
 
   return (
     <div>
@@ -479,7 +479,7 @@ export default function Predict() {
 
       {tab==='tournament' && (
         <div>
-          {tournLocked && <div className="alert alert-error">Turneringsgæt er låst — VM er startet!</div>}
+          {tournLocked && <div className="alert alert-error">Turneringsgæt er låst — deadline var 22. juni kl. 23:59.</div>}
           {saveMsg && <div className={`alert ${saveMsg.includes('✅')?'alert-success':'alert-error'}`}>{saveMsg}</div>}
 
           <div className="card">
