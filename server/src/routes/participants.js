@@ -46,8 +46,29 @@ router.get('/', async (req, res) => {
       }
       return { ...p, tournament_pts: tournPts.pts, dream_team_pts: dreamPts.pts, match_pts: matchPts,
                total_pts: tournPts.pts + dreamPts.pts + matchPts,
+               _varGuess: tournPts.varGuess,
                breakdown: [...tournPts.breakdown, ...dreamPts.breakdown, ...matchBreakdown] };
     }));
+    // VAR penalty ranking: nearest guess wins 30pt, 2nd nearest 15pt
+    const varTotalRes = await pool.query("SELECT player FROM tournament_results WHERE result_key='var_penalties_total'");
+    const varTotal = varTotalRes.rows.length ? parseInt(varTotalRes.rows[0].player) || null : null;
+
+    if (varTotal !== null) {
+      // Rank all participants by closeness to actual
+      const withVar = data.filter(p => p._varGuess !== null && p._varGuess !== undefined);
+      withVar.sort((a, b) => Math.abs(a._varGuess - varTotal) - Math.abs(b._varGuess - varTotal));
+      if (withVar.length > 0) {
+        withVar[0].tournament_pts += 30;
+        withVar[0].total_pts += 30;
+        withVar[0].breakdown.push({ cat: `VAR straffespark (gættet ${withVar[0]._varGuess}, var ${varTotal}) 🎯 1. plads`, pts: 30 });
+      }
+      if (withVar.length > 1 && Math.abs(withVar[1]._varGuess - varTotal) !== Math.abs(withVar[0]._varGuess - varTotal)) {
+        withVar[1].tournament_pts += 15;
+        withVar[1].total_pts += 15;
+        withVar[1].breakdown.push({ cat: `VAR straffespark (gættet ${withVar[1]._varGuess}, var ${varTotal}) 2. plads`, pts: 15 });
+      }
+    }
+
     data.sort((a, b) => b.total_pts - a.total_pts);
     res.json(data);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
@@ -182,7 +203,7 @@ router.put('/:id/tournament-prediction', async (req, res) => {
   try {
     const part = await pool.query('SELECT id FROM participants WHERE id=$1 AND pin=$2', [req.params.id, pin]);
     if (!part.rows.length) return res.status(401).json({ error: 'Ugyldig PIN' });
-    const lockTime = new Date('2026-06-11T18:45:00Z');
+    const lockTime = new Date('2026-06-15T21:00:00Z'); // 15. juni kl. 23:00 dansk tid
     if (new Date() > lockTime) return res.status(403).json({ error: 'Turneringsgæt er låst!' });
     const existing = await pool.query('SELECT id FROM tournament_predictions WHERE participant_id=$1', [req.params.id]);
     const params = buildParams(prediction, req.params.id);
@@ -198,7 +219,8 @@ router.put('/:id/tournament-prediction', async (req, res) => {
         most_yellow_team=$40,most_yellow_player=$41,most_red_team=$42,most_red_player=$43,most_yellow_team_overall=$44,most_red_team_overall=$45,
         most_mvp_player=$46,most_mvp_team=$47,tournament_player=$48,tournament_player_team=$49,
         least_goals_conceded=$50,most_goals_scored=$51,most_card_pts_player=$52,most_card_pts_player_team=$53,most_card_pts_team=$54,
-        updated_at=NOW() WHERE participant_id=$55`, params);
+        var_penalties=$55,
+        updated_at=NOW() WHERE participant_id=$56`, params);
     } else {
       await pool.query(`INSERT INTO tournament_predictions (
         topscorer_1_team,topscorer_1_player,topscorer_2_team,topscorer_2_player,topscorer_3_team,topscorer_3_player,
@@ -211,8 +233,8 @@ router.put('/:id/tournament-prediction', async (req, res) => {
         most_yellow_team,most_yellow_player,most_red_team,most_red_player,most_yellow_team_overall,most_red_team_overall,
         most_mvp_player,most_mvp_team,tournament_player,tournament_player_team,
         least_goals_conceded,most_goals_scored,most_card_pts_player,most_card_pts_player_team,most_card_pts_team,
-        participant_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55)`, params);
+        var_penalties,participant_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56)`, params);
     }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Serverfejl' }); }
@@ -230,6 +252,7 @@ function buildParams(p, participantId) {
     p.most_yellow_team,p.most_yellow_player,p.most_red_team,p.most_red_player,p.most_yellow_team_overall,p.most_red_team_overall,
     p.most_mvp_player,p.most_mvp_team,p.tournament_player,p.tournament_player_team,
     p.least_goals_conceded,p.most_goals_scored,p.most_card_pts_player,p.most_card_pts_player_team,p.most_card_pts_team,
+    p.var_penalties ?? null,
     participantId,
   ];
 }

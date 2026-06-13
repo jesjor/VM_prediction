@@ -529,6 +529,30 @@ export default function Predict() {
             </div>
           </div>
 
+          {/* VAR straffespark bet */}
+          <div className="card" style={{borderColor:'rgba(239,68,68,.3)',background:'rgba(239,68,68,.04)'}}>
+            <div className="section-title" style={{marginTop:0,color:'var(--red)'}}>🚨 VAR Straffespark — Specielt gæt</div>
+            <p style={{fontSize:13,color:'var(--text2)',marginBottom:10,lineHeight:1.6}}>
+              Gæt på antal VAR-tildelte straffespark under hele VM 2026. Nærmest-vinder princip:
+              1. plads = <strong style={{color:'var(--gold)'}}>30 pt</strong>, 2. plads = <strong>15 pt</strong>, resten = 0.
+            </p>
+            <p style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>
+              ⏰ Låses 15. juni 2026 kl. 23:00 dansk tid
+            </p>
+            <div className="form-group">
+              <div className="form-label">Antal VAR straffespark i hele VM <span style={{color:'var(--gold)',marginLeft:4}}>· Nærmest vinder 30 pt</span></div>
+              <input
+                type="number" min="0" max="200"
+                className="form-input"
+                value={tournPred.var_penalties ?? ''}
+                onChange={e => setTournPred(d => ({...d, var_penalties: e.target.value === '' ? null : parseInt(e.target.value)}))}
+                placeholder="fx 12"
+                style={{maxWidth:120, fontSize:18, fontWeight:700, textAlign:'center'}}
+                disabled={tournLocked}
+              />
+            </div>
+          </div>
+
           {!tournLocked && <button className="btn btn-gold btn-full" onClick={saveTournament} disabled={saving}>{saving?'Gemmer...':'💾 Gem turneringsgæt'}</button>}
         </div>
       )}

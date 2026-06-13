@@ -78,7 +78,11 @@ export function calcTournamentPoints(prediction, results) {
     if (rv && pv && rv === pv) { pts += s.pts; breakdown.push({ cat: s.label, pts: s.pts }); }
   }
 
-  return { pts, breakdown };
+  // VAR straffespark — nærmest-vinder, beregnes samlet på leaderboard-niveau
+  const varGuess = prediction.var_penalties !== null && prediction.var_penalties !== undefined
+    ? parseInt(prediction.var_penalties) : null;
+
+  return { pts, breakdown, varGuess };
 }
 
 // Dream team: 5pt pr rigtig spiller, 25pt for bedste spiller

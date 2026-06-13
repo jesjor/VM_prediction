@@ -35,7 +35,8 @@ function EventRow({ ev, index, homeTeam, awayTeam, squads, onChange, onRemove })
         </select>
         <div style={{position:'relative'}}>
           {unmatched && <div style={{fontSize:10,color:'var(--gold)',marginBottom:2}}>⚠️ API: "{ev._api_player}"</div>}
-          <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13,borderColor: unmatched ? 'var(--gold)' : undefined}}>
+          {ev.is_var_penalty && <div style={{fontSize:10,color:'var(--red)',marginBottom:2}}>🚨 VAR straffespark</div>}
+          <select className="form-select" value={ev.player||''} onChange={e=>onChange(index,'player',e.target.value)} style={{padding:'6px 8px',fontSize:13,borderColor: unmatched ? 'var(--gold)' : ev.is_var_penalty ? 'var(--red)' : undefined}}>
             <option value="">{unmatched ? `⚠️ Vælg spiller (API: ${ev._api_player})` : 'Spiller'}</option>
             {players.map(p=><option key={p.player} value={p.player}>{playerLabel(p)}</option>)}
           </select>
@@ -123,6 +124,248 @@ function MatchEditor({ match, squads, onSave }) {
     setFetching(false)
   }
 
+  // ── LIVESCORE PASTE PARSER ─────────────────────────────────────────────
+  const [pasteText, setPasteText] = useState('')
+  const [showPaste, setShowPaste] = useState(false)
+
+  function parseLivescore(text) {
+    const extractName = str => {
+      // Extract name from markdown link, also strip VAR suffix
+      const m = str.match(/\[([^\]]+)\]\([^)]+\)/)
+      const raw = m ? m[1].trim() : str.trim()
+      const isVAR = raw.toUpperCase().endsWith('VAR')
+      const name = isVAR ? raw.slice(0, -3).trim() : raw
+      return { name, isVAR }
+    }
+
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    const parsed = []
+    let currentScore = { home: 0, away: 0 }
+    let i = 0
+
+    const isMinute = l => /^\d{1,3}(\s*\+\s*\d{1,3})?'$/.test(l)
+    const isScore  = l => /^\d+\s*[-–]\s*\d+$/.test(l)
+    const isPen    = l => /^PEN$/i.test(l)
+    const isIgnored = l => ['HT', 'FT', 'AET', 'ET'].some(k => l.toUpperCase() === k) || /^VAR$/.test(l.toUpperCase())
+    const parseMinute = l => {
+      const m = l.match(/^(\d{1,3})(\s*\+\s*(\d{1,3}))?'$/)
+      return m ? parseInt(m[1]) + (m[3] ? parseInt(m[3]) : 0) : null
+    }
+    const parseScore = l => {
+      const m = l.match(/^(\d+)\s*[-–]\s*(\d+)$/)
+      return m ? { home: parseInt(m[1]), away: parseInt(m[2]) } : null
+    }
+
+    while (i < lines.length) {
+      const line = lines[i]
+
+      if (isIgnored(line)) { i++; continue }
+      if (isScore(line))   { currentScore = parseScore(line); i++; continue }
+
+      // PEN keyword — next block is a penalty kick
+      if (isPen(line)) {
+        i++
+        // Optional: VAR line before player
+        let isVarPen = false
+        // Collect block: score before player, then player line(s)
+        let preScore = null
+        if (i < lines.length && isScore(lines[i])) { preScore = parseScore(lines[i]); i++ }
+        const block = []
+        while (i < lines.length && !isMinute(lines[i]) && !isScore(lines[i]) && !isIgnored(lines[i]) && !isPen(lines[i])) {
+          block.push(lines[i]); i++
+        }
+        const postScore = i < lines.length && isScore(lines[i]) ? parseScore(lines[i]) : null
+        if (postScore) i++
+        const nextScore = preScore || postScore
+        if (!block.length) { if (nextScore) currentScore = nextScore; continue }
+
+        const { name: playerName, isVAR } = extractName(block[0])
+        const homeChange = nextScore ? nextScore.home - currentScore.home : 0
+        const team = homeChange > 0 ? home : away
+
+        parsed.push({
+          minute: 0, // will be filled if we find a minute
+          event_type: 'goal',
+          team,
+          player: playerName,
+          assist_player: null,
+          is_penalty: true,
+          is_var_penalty: isVAR,
+          _unmatched: false,
+        })
+        if (nextScore) currentScore = nextScore
+        continue
+      }
+
+      if (isMinute(line)) {
+        const minute = parseMinute(line)
+        i++
+
+        // Check if next lines indicate a PEN before the player block
+        let isPenaltyNext = false
+        if (i < lines.length && isPen(lines[i])) { isPenaltyNext = true; i++ }
+
+        // Score before player
+        let preScore = null
+        if (i < lines.length && isScore(lines[i])) { preScore = parseScore(lines[i]); i++ }
+
+        const block = []
+        while (i < lines.length && !isMinute(lines[i]) && !isScore(lines[i]) && !isIgnored(lines[i]) && !isPen(lines[i])) {
+          block.push(lines[i]); i++
+        }
+
+        const postScore = i < lines.length && isScore(lines[i]) ? parseScore(lines[i]) : null
+        if (postScore) i++
+        const nextScore = preScore || postScore
+
+        if (!block.length) { if (nextScore) currentScore = nextScore; continue }
+
+        const mainPlayerRaw = block[0]
+        const isOG = block.some(b => /^OG$/i.test(b))
+        const { name: mainPlayer, isVAR } = extractName(mainPlayerRaw)
+
+        let assist = null
+        for (let j = 1; j < block.length; j++) {
+          const b = block[j]
+          if (/^OG$/i.test(b)) continue
+          if (!b.includes('](')) { assist = b.trim(); break }
+        }
+
+        if (nextScore || isPenaltyNext) {
+          const homeChange = nextScore ? nextScore.home - currentScore.home : 0
+          let event_type, team
+          if (isOG) {
+            event_type = 'own_goal'
+            team = homeChange > 0 ? away : home
+          } else {
+            event_type = 'goal'
+            team = homeChange > 0 ? home : away
+          }
+          if (mainPlayer) {
+            parsed.push({
+              minute, event_type, team,
+              player: mainPlayer,
+              assist_player: assist || null,
+              is_penalty: isPenaltyNext,
+              is_var_penalty: isVAR || isPenaltyNext && isVAR,
+              _unmatched: false,
+            })
+          }
+          if (nextScore) currentScore = nextScore
+        } else {
+          // Card event
+          if (mainPlayer) {
+            parsed.push({
+              minute, event_type: 'yellow', team: '',
+              player: mainPlayer, assist_player: null,
+              _unmatched: false, _needsTeam: true,
+            })
+          }
+        }
+        continue
+      }
+
+      i++
+    }
+
+    // Fix penalty minutes: assign minute from context if missing
+    parsed.forEach((ev, idx) => {
+      if (ev.minute === 0 && idx > 0) {
+        // Try to find the nearest minute
+        const prev = parsed.slice(0, idx).reverse().find(e => e.minute > 0)
+        if (prev) ev.minute = prev.minute + 1
+      }
+    })
+
+    return parsed
+  }
+
+
+  function matchToSquad(parsedEvents) {
+    const homeSquad = (squads[home] || []).map(p => p.player)
+    const awaySquad = (squads[away] || []).map(p => p.player)
+    const allSquad = [...homeSquad, ...awaySquad]
+
+    function bestMatch(name) {
+      if (!name) return { player: name, team: '', unmatched: true }
+      const nl = name.toLowerCase().replace(/[^a-z ]/g, '')
+
+      // Try exact
+      let found = allSquad.find(p => p.toLowerCase() === nl)
+      if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+
+      // Try last name
+      const last = nl.split(' ').pop()
+      found = allSquad.find(p => p.toLowerCase().split(' ').pop() === last)
+      if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+
+      // Try any word match
+      const words = nl.split(' ').filter(w => w.length > 2)
+      found = allSquad.find(p => words.some(w => p.toLowerCase().includes(w)))
+      if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+
+      // Try initials: "F. Balogun" → match "Folarin Balogun"
+      const initialMatch = nl.match(/^([a-z])\.\s+([a-z]+)$/)
+      if (initialMatch) {
+        const [, init, last2] = initialMatch
+        found = allSquad.find(p => {
+          const pl = p.toLowerCase()
+          return pl.endsWith(last2) && pl.startsWith(init)
+        })
+        if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+      }
+
+      return { player: name, team: '', unmatched: true }
+    }
+
+    return parsedEvents.map(ev => {
+      const playerMatch = bestMatch(ev.player)
+      const assistMatch = ev.assist_player ? bestMatch(ev.assist_player) : null
+
+      // For cards without team, use the squad match result
+      const team = ev.team || playerMatch.team
+
+      return {
+        ...ev,
+        player: playerMatch.player,
+        team: team,
+        assist_player: assistMatch ? assistMatch.player : null,
+        _unmatched: playerMatch.unmatched,
+        _assist_unmatched: assistMatch ? assistMatch.unmatched : false,
+        _api_player: ev.player,
+        _api_assist: ev.assist_player,
+        _team_players: team ? (squads[team] || []).map(p => p.player) : [],
+      }
+    })
+  }
+
+  function applyPaste() {
+    if (!pasteText.trim()) return
+    const parsed = parseLivescore(pasteText)
+    const matched = matchToSquad(parsed)
+    setEvents(matched)
+    setStatus('finished')
+
+    const varCount = matched.filter(e => e.is_var_penalty).length
+    const warnings = matched.filter(e => e._unmatched || e._assist_unmatched || !e.team)
+      .map(e =>
+        !e.team
+          ? `Min ${e.minute}: "${e.player}" — vælg hold manuelt`
+          : e._unmatched
+          ? `Min ${e.minute}: "${e._api_player}" → ikke fundet i truppeliste`
+          : `Min ${e.minute}: Assist "${e._api_assist}" → ikke fundet`
+      )
+
+    setFetchWarnings([
+      ...(varCount > 0 ? [`🚨 ${varCount} VAR straffespark registreret i denne kamp — husk at opdatere VAR-tælleren under "VAR Straffe" fanen`] : []),
+      ...warnings,
+    ])
+    setMsg(`✅ Parsede ${matched.length} begivenheder${varCount > 0 ? ` (${varCount} VAR straffe ⚽)` : ''}${warnings.length ? ` · ${warnings.length} kræver bekræftelse` : ' — alt matchet!'}`)
+    setShowPaste(false)
+    setPasteText('')
+  }
+  // ── END PASTE PARSER ───────────────────────────────────────────────────
+
   function addEvent() {
     setEvents(e=>[...e,{team:home!=='?'?home:'',player:'',event_type:'goal',minute:''}])
   }
@@ -171,6 +414,15 @@ function MatchEditor({ match, squads, onSave }) {
           <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{fmt(match.kickoff)} · {match.stadium_name}</div>
         </div>
         <button className="btn btn-sm" onClick={()=>setOpen(o=>!o)} style={{flexShrink:0}}>{open?'Luk':'Rediger'}</button>
+        {match.home_team && match.away_team && (
+          <a
+            href={`https://www.livescore.com/en/football/international/world-cup-2026/`}
+            target="_blank" rel="noopener noreferrer"
+            className="btn btn-sm"
+            style={{flexShrink:0,textDecoration:'none'}}
+            title="Åbn livescore.com"
+          >🔗</a>
+        )}
       </div>
 
       {open && (
@@ -180,12 +432,31 @@ function MatchEditor({ match, squads, onSave }) {
           {/* Live fetch button */}
           {home!=='?' && away!=='?' && (
             <div style={{marginBottom:12}}>
-              <button className="btn btn-primary btn-full" onClick={liveFetch} disabled={fetching} style={{marginBottom:6}}>
-                {fetching ? '📡 Henter fra API-Football...' : '📡 Hent kampdata automatisk'}
-              </button>
-              <div style={{fontSize:11,color:'var(--text3)',textAlign:'center'}}>
-                Henter mål, kort og assists — du kan rette navne efterfølgende
+              <div style={{display:'flex',gap:8,marginBottom:6}}>
+                <button className="btn btn-primary" style={{flex:1}} onClick={liveFetch} disabled={fetching}>
+                  {fetching ? '📡 Henter...' : '📡 Hent fra API (kræver betalt plan)'}
+                </button>
+                <button className="btn btn-gold" style={{flex:1}} onClick={()=>setShowPaste(p=>!p)}>
+                  📋 {showPaste ? 'Luk' : 'Indsæt fra livescore.com'}
+                </button>
               </div>
+
+              {showPaste && (
+                <div style={{background:'var(--bg3)',borderRadius:8,padding:10,marginBottom:8}}>
+                  <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>
+                    Gå til kampen på <strong>livescore.com</strong>, marker og kopier alt tekst fra begivenhedslisten, og indsæt herunder:
+                  </div>
+                  <textarea
+                    value={pasteText}
+                    onChange={e=>setPasteText(e.target.value)}
+                    placeholder={'7\'\n[D. Bobadilla](https://...)\nOG\n1 - 0\n31\'\n[F. Balogun](https://...)C. Pulisic\n2 - 0\n...'}
+                    style={{width:'100%',minHeight:140,padding:8,borderRadius:6,border:'1px solid var(--border2)',background:'var(--bg)',color:'var(--text)',fontFamily:'monospace',fontSize:12,resize:'vertical',boxSizing:'border-box'}}
+                  />
+                  <button className="btn btn-gold btn-full" style={{marginTop:6}} onClick={applyPaste} disabled={!pasteText.trim()}>
+                    ✨ Parse og udfyld begivenheder
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -419,6 +690,47 @@ function CardStats() {
   )
 }
 
+function VarPenaltyManager() {
+  const [total, setTotal] = useState('')
+  const [saved, setSaved] = useState(null)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    api.get('/matches/stats/var-penalties').then(r => { setSaved(r.data.total); setTotal(String(r.data.total)) }).catch(()=>{})
+  }, [])
+
+  async function save() {
+    try {
+      await api.put('/matches/stats/var-penalties', { total: parseInt(total)||0 })
+      setSaved(parseInt(total)||0)
+      setMsg('✅ Gemt!')
+      setTimeout(()=>setMsg(''),3000)
+    } catch { setMsg('Fejl') }
+  }
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{marginTop:0}}>🚨 VAR Straffespark — Samlet antal</div>
+      <p style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>
+        Registrer det akkumulerede antal VAR-tildelte straffespark under VM. Opdater efter hver kamp hvor der tildeles et.
+        Aktuelt gemt: <strong style={{color:'var(--gold)',fontFamily:"'Barlow Condensed',sans-serif",fontSize:20}}>{saved ?? '—'}</strong>
+      </p>
+      {msg && <div className={`alert ${msg.includes('✅')?'alert-success':'alert-error'}`} style={{marginBottom:8}}>{msg}</div>}
+      <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
+        <div style={{flex:1}}>
+          <div className="form-label">Totalt antal VAR straffespark</div>
+          <input className="form-input" type="number" min="0" max="200" value={total}
+            onChange={e=>setTotal(e.target.value)}
+            style={{fontSize:24,fontWeight:800,fontFamily:"'Barlow Condensed',sans-serif",maxWidth:120,textAlign:'center'}}
+          />
+        </div>
+        <button className="btn btn-gold" onClick={save}>💾 Gem</button>
+      </div>
+    </div>
+  )
+}
+
+
 export default function AdminDashboard() {
   const [tab, setTab] = useState('matches')
   const [matches, setMatches] = useState([])
@@ -457,6 +769,7 @@ export default function AdminDashboard() {
         <button className={`tab-btn${tab==='matches'?' active':''}`} onClick={()=>setTab('matches')}>⚽ Kampe</button>
         <button className={`tab-btn${tab==='squads'?' active':''}`} onClick={()=>setTab('squads')}>👥 Trupper</button>
         <button className={`tab-btn${tab==='tournament'?' active':''}`} onClick={()=>setTab('tournament')}>🏆 Turneringsresultater</button>
+        <button className={`tab-btn${tab==='var'?' active':''}`} onClick={()=>setTab('var')}>🚨 VAR Straffe</button>
         <button className={`tab-btn${tab==='cards'?' active':''}`} onClick={()=>setTab('cards')}>🃏 Kortstatistik</button>
       </div>
 
@@ -490,6 +803,15 @@ export default function AdminDashboard() {
             Opdater løbende — point genberegnes automatisk for alle deltagere.
           </div>
           <div className="card"><TournamentResults results={results} squads={squads} onUpdate={loadAll} /></div>
+        </div>
+      )}
+
+      {tab==='var' && (
+        <div>
+          <div className="alert alert-info" style={{fontSize:13,marginBottom:12}}>
+            Opdater det totale antal VAR-tildelte straffespark under VM løbende. Bruges til pointberegning.
+          </div>
+          <VarPenaltyManager />
         </div>
       )}
 

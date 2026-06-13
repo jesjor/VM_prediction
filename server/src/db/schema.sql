@@ -221,3 +221,27 @@ END $$;
 
 -- Guess counts (cached for performance)
 -- We'll compute these on-the-fly from queries
+
+-- VAR penalty prediction
+DO $$ BEGIN
+  ALTER TABLE tournament_predictions ADD COLUMN IF NOT EXISTS var_penalties INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- VAR penalty counter on matches
+DO $$ BEGIN
+  ALTER TABLE matches ADD COLUMN IF NOT EXISTS var_penalties INTEGER DEFAULT 0;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- VAR penalty deadline (48h from tournament start)
+-- Stored as a tournament result key
+INSERT INTO tournament_results (result_key, player) VALUES ('var_penalties_total', '0')
+ON CONFLICT (result_key) DO NOTHING;
+
+-- Penalty and VAR penalty tracking on match events
+DO $$ BEGIN
+  ALTER TABLE match_events ADD COLUMN IF NOT EXISTS is_penalty BOOLEAN DEFAULT FALSE;
+  ALTER TABLE match_events ADD COLUMN IF NOT EXISTS is_var_penalty BOOLEAN DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;

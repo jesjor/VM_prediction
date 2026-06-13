@@ -75,6 +75,16 @@ export default function Rules() {
       ]
     },
     {
+      title: '🚨 VAR Straffespark — Specielt gæt',
+      sub: 'Nærmest-vinder: gæt på det totale antal VAR-tildelte straffespark under hele VM. Låses 48 timer efter turneringsstart.',
+      rows: [
+        { label: '1. plads (nærmest det korrekte antal)', pts: '30 pt', highlight: true },
+        { label: '2. plads', pts: '15 pt' },
+        { label: '3. plads og resten', pts: '0 pt' },
+        { label: 'Ved uafgjort deler de berørte pladser point', pts: '' },
+      ]
+    },
+    {
       title: '🌟 VM Hold (Dream Team)',
       sub: 'Vælg 11 spillere til det officielle VM All-Star hold + bedste spiller. Aflåses ved VM-start.',
       rows: [

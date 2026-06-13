@@ -150,8 +150,9 @@ router.patch('/:id/result', requireAdmin, async (req, res) => {
     for (const ev of events) {
       if (!ev.player||!ev.event_type) continue;
       const assistTeam=ev.event_type==='goal'&&ev.assist_player?ev.team:null;
-      await client.query('INSERT INTO match_events (match_id,team,player,event_type,minute,assist_player,assist_team) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [id,ev.team,ev.player,ev.event_type,ev.minute||null,ev.assist_player||null,assistTeam]);
+      await client.query('INSERT INTO match_events (match_id,team,player,event_type,minute,assist_player,assist_team,is_penalty,is_var_penalty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+        [id,ev.team,ev.player,ev.event_type,ev.minute||null,ev.assist_player||null,assistTeam,
+         ev.is_penalty||false,ev.is_var_penalty||false]);
     }
     if (winner) {
       const winSlot=`W-${id}`, loseSlot=`L-${id}`, loser=winner===hTeam?aTeam:hTeam;
@@ -360,3 +361,22 @@ router.get('/:id/livefetch', requireAdmin, async (req, res) => {
 });
 
 export default router;
+
+// GET total VAR penalties (for leaderboard/stats)
+router.get('/stats/var-penalties', async (req, res) => {
+  try {
+    const r = await pool.query("SELECT player FROM tournament_results WHERE result_key='var_penalties_total'");
+    const total = r.rows.length ? parseInt(r.rows[0].player) || 0 : 0;
+    res.json({ total });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
+
+// PUT update VAR penalty total (admin)
+router.put('/stats/var-penalties', requireAdmin, async (req, res) => {
+  const { total } = req.body;
+  try {
+    await pool.query(`INSERT INTO tournament_results (result_key, player) VALUES ('var_penalties_total', $1)
+      ON CONFLICT (result_key) DO UPDATE SET player=$1, updated_at=NOW()`, [String(total)]);
+    res.json({ ok: true, total });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});
