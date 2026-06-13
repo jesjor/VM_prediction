@@ -12,6 +12,7 @@ const norm = s => (s || '').trim().toLowerCase()
 
 function calcMatchPts(pred, match) {
   if (!match || match.status !== 'finished') return { pts: 0, breakdown: [] }
+  if (!pred) return { pts: 0, breakdown: [] }
   let pts = 0
   const breakdown = []
 

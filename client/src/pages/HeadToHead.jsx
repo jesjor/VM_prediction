@@ -5,6 +5,7 @@ const norm = s => (s || '').trim().toLowerCase()
 
 function calcMatchBreakdown(pred, match) {
   if (!match || match.status !== 'finished') return { pts: 0, breakdown: [] }
+  if (!pred) return { pts: 0, breakdown: [{ cat: 'Ingen gæt afgivet', pts: 0, hit: false }] }
   let pts = 0
   const breakdown = []
   const actual = match.home_score > match.away_score ? '1' : match.away_score > match.home_score ? '2' : 'X'
