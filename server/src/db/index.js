@@ -26,7 +26,13 @@ export async function initDb() {
       await client.query(`
         INSERT INTO matches (id, round, group_name, home_team, away_team, home_slot, away_slot, kickoff, stadium_key, stadium_name, stadium_city, stadium_capacity, label)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        ON CONFLICT (id) DO UPDATE SET kickoff=EXCLUDED.kickoff, stadium_key=EXCLUDED.stadium_key, stadium_name=EXCLUDED.stadium_name, stadium_city=EXCLUDED.stadium_city, label=EXCLUDED.label
+        ON CONFLICT (id) DO UPDATE SET
+          kickoff=EXCLUDED.kickoff, stadium_key=EXCLUDED.stadium_key, stadium_name=EXCLUDED.stadium_name,
+          stadium_city=EXCLUDED.stadium_city, label=EXCLUDED.label,
+          home_team=CASE WHEN matches.status='scheduled' THEN EXCLUDED.home_team ELSE matches.home_team END,
+          away_team=CASE WHEN matches.status='scheduled' THEN EXCLUDED.away_team ELSE matches.away_team END,
+          home_slot=CASE WHEN matches.status='scheduled' THEN EXCLUDED.home_slot ELSE matches.home_slot END,
+          away_slot=CASE WHEN matches.status='scheduled' THEN EXCLUDED.away_slot ELSE matches.away_slot END
       `, [m.id, m.group ? 'GROUP' : m.round, m.group||null, m.home||null, m.away||null, m.homeSlot||null, m.awaySlot||null, m.kickoff, m.stadium, stadium.name, stadium.city, stadium.capacity, m.label||null]);
     }
 

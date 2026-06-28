@@ -413,3 +413,13 @@ router.put('/stats/var-totals', requireAdmin, async (req, res) => {
     res.json({ ok: true });
   } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
 });
+
+// POST reset/clear predictions for specific matches (admin) — used when bracket data was corrected
+router.post('/admin/clear-predictions', requireAdmin, async (req, res) => {
+  const { matchIds } = req.body; // array of match IDs
+  if (!Array.isArray(matchIds) || !matchIds.length) return res.status(400).json({ error: 'matchIds skal være et array' });
+  try {
+    const r = await pool.query('DELETE FROM match_predictions WHERE match_id = ANY($1)', [matchIds]);
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch(err) { res.status(500).json({ error: 'Serverfejl' }); }
+});

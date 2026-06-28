@@ -712,6 +712,45 @@ function VarTotalsManager() {
 }
 
 
+function ClearR32PredictionsButton({ onDone }) {
+  const [done, setDone] = useState(localStorage.getItem('r32_predictions_cleared') === 'true')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function clear() {
+    if (!confirm('Dette sletter ALLE brugeres gæt på de 16 knockout-kampe (R32, id 73-88), da kampprogrammet var forkert. Kan ikke fortrydes. Fortsæt?')) return
+    setLoading(true)
+    try {
+      const r = await api.post('/matches/admin/clear-predictions', { matchIds: [73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88] })
+      setMsg(`✅ Slettet ${r.data.deleted} gæt på de forkerte R32-kampe.`)
+      localStorage.setItem('r32_predictions_cleared', 'true')
+      setDone(true)
+      onDone()
+    } catch(e) { setMsg('❌ ' + (e.response?.data?.error || 'Fejl')) }
+    setLoading(false)
+  }
+
+  if (done) return (
+    <div className="alert alert-success" style={{fontSize:13,marginBottom:12}}>
+      ✓ R32-gæt er ryddet efter kampprogram-korrektion. {msg}
+    </div>
+  )
+
+  return (
+    <div style={{background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.3)',borderRadius:8,padding:'10px 14px',marginBottom:12}}>
+      <div style={{fontWeight:600,fontSize:13,marginBottom:6}}>⚠️ Kampprogrammet for knockout (R32) er nu rettet til de officielle kampe</div>
+      <div style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>
+        Brugernes gæt på de 16 R32-kampe blev afgivet på det forkerte (forudsagte) kampprogram. Klik herunder for at slette disse gæt, så brugerne kan gætte igen på de korrekte kampe.
+      </div>
+      {msg && <div style={{fontSize:12,marginBottom:6,color:msg.includes('✅')?'var(--green)':'var(--red)'}}>{msg}</div>}
+      <button className="btn btn-sm" style={{background:'var(--red)',color:'#fff',borderColor:'var(--red)'}} onClick={clear} disabled={loading}>
+        {loading ? 'Sletter...' : '🗑️ Ryd gæt på R32-kampe (73-88)'}
+      </button>
+    </div>
+  )
+}
+
+
 export default function AdminDashboard() {
   const [tab, setTab] = useState('matches')
   const [matches, setMatches] = useState([])
@@ -764,6 +803,7 @@ export default function AdminDashboard() {
           <div className="alert alert-info" style={{fontSize:13,marginBottom:12}}>
             Tilføj begivenheder (mål, kort, assists) — scoren beregnes automatisk. Knockout-progression opdateres automatisk.
           </div>
+          <ClearR32PredictionsButton onDone={loadAll} />
           {display.map(m=><MatchEditor key={m.id} match={m} squads={squads} onSave={loadAll} />)}
           {display.length===0 && <div className="empty">Ingen kampe i denne visning.</div>}
         </div>
