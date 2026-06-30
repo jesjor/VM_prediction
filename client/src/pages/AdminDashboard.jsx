@@ -104,7 +104,13 @@ function MatchEditor({ match, squads, onSave }) {
       return { name, isVAR }
     }
 
-    const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    const rawLinesFull = text.split('\n').map(l => l.trim()).filter(Boolean)
+    // Find AET marker — everything after it is the penalty SHOOTOUT (not in-game events)
+    // and must be completely excluded from match events / official goals.
+    const aetIndex = rawLinesFull.findIndex(l => l.toUpperCase() === 'AET')
+    const rawLines = aetIndex !== -1 ? rawLinesFull.slice(0, aetIndex) : rawLinesFull
+    const shootoutLines = aetIndex !== -1 ? rawLinesFull.slice(aetIndex + 1) : []
+
     const parsed = []
     let currentScore = { home: 0, away: 0 }
     let i = 0
@@ -243,7 +249,17 @@ function MatchEditor({ match, squads, onSave }) {
       }
     })
 
-    return parsed
+    // Parse shootout (penalty competition) result if present — does NOT count as goals
+    let shootout = null
+    if (shootoutLines.length) {
+      const scoreLines = shootoutLines.filter(l => isScore(l))
+      if (scoreLines.length) {
+        const finalScore = parseScore(scoreLines[scoreLines.length - 1])
+        if (finalScore) shootout = { home_pens: finalScore.home, away_pens: finalScore.away }
+      }
+    }
+
+    return { events: parsed, shootout, finalScore: currentScore }
   }
 
 
@@ -254,33 +270,41 @@ function MatchEditor({ match, squads, onSave }) {
 
     function bestMatch(name) {
       if (!name) return { player: name, team: '', unmatched: true }
-      const nl = name.toLowerCase().replace(/[^a-z ]/g, '')
+      const nl = name.toLowerCase().replace(/[^a-z ]/g, '').trim()
+      if (!nl) return { player: name, team: '', unmatched: true }
 
-      // Try exact
+      // Try exact full-name match
       let found = allSquad.find(p => p.toLowerCase() === nl)
       if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
 
-      // Try last name
+      // Try exact last-name match (last word of input vs last word of squad name)
       const last = nl.split(' ').pop()
-      found = allSquad.find(p => p.toLowerCase().split(' ').pop() === last)
-      if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
-
-      // Try any word match
-      const words = nl.split(' ').filter(w => w.length > 2)
-      found = allSquad.find(p => words.some(w => p.toLowerCase().includes(w)))
-      if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
-
-      // Try initials: "F. Balogun" → match "Folarin Balogun"
-      const initialMatch = nl.match(/^([a-z])\.\s+([a-z]+)$/)
-      if (initialMatch) {
-        const [, init, last2] = initialMatch
-        found = allSquad.find(p => {
-          const pl = p.toLowerCase()
-          return pl.endsWith(last2) && pl.startsWith(init)
-        })
-        if (found) return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+      if (last.length >= 3) {
+        const lastNameMatches = allSquad.filter(p => p.toLowerCase().split(' ').pop() === last)
+        // Only accept if exactly one player across both squads has this exact last name (avoid ambiguous matches)
+        if (lastNameMatches.length === 1) {
+          found = lastNameMatches[0]
+          return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+        }
       }
 
+      // Try initials pattern: "F. Balogun" → match "Folarin Balogun"
+      const initialMatch = nl.match(/^([a-z])\.?\s+([a-z]+)$/) || name.trim().match(/^([A-Za-z])\.?\s+([A-Za-z]+)$/)
+      if (initialMatch) {
+        const init = initialMatch[1].toLowerCase()
+        const last2 = initialMatch[2].toLowerCase()
+        const initialMatches = allSquad.filter(p => {
+          const pl = p.toLowerCase()
+          const parts = pl.split(' ')
+          return parts[parts.length - 1] === last2 && pl.startsWith(init)
+        })
+        if (initialMatches.length === 1) {
+          found = initialMatches[0]
+          return { player: found, team: homeSquad.includes(found) ? home : away, unmatched: false }
+        }
+      }
+
+      // No confident match — leave unmatched rather than guessing with loose substring matching
       return { player: name, team: '', unmatched: true }
     }
 
@@ -307,10 +331,16 @@ function MatchEditor({ match, squads, onSave }) {
 
   function applyPaste() {
     if (!pasteText.trim()) return
-    const parsed = parseLivescore(pasteText)
+    const { events: parsed, shootout } = parseLivescore(pasteText)
     const matched = matchToSquad(parsed)
     setEvents(matched)
     setStatus('finished')
+
+    // Apply penalty shootout result if detected (does not count as goals)
+    if (shootout) {
+      setPensHome(String(shootout.home_pens))
+      setPensAway(String(shootout.away_pens))
+    }
 
     const varCount = matched.filter(e => e.is_var_penalty).length
     const warnings = matched.filter(e => e._unmatched || e._assist_unmatched || !e.team)
@@ -318,15 +348,16 @@ function MatchEditor({ match, squads, onSave }) {
         !e.team
           ? `Min ${e.minute}: "${e.player}" — vælg hold manuelt`
           : e._unmatched
-          ? `Min ${e.minute}: "${e._api_player}" → ikke fundet i truppeliste`
-          : `Min ${e.minute}: Assist "${e._api_assist}" → ikke fundet`
+          ? `Min ${e.minute}: "${e._api_player}" → ikke fundet i truppeliste, vælg manuelt`
+          : `Min ${e.minute}: Assist "${e._api_assist}" → ikke fundet, vælg manuelt`
       )
 
     setFetchWarnings([
+      ...(shootout ? [`🥅 Straffesparkskonkurrence registreret: ${shootout.home_pens}-${shootout.away_pens}. Disse mål tæller IKKE som officielle kampmål.`] : []),
       ...(varCount > 0 ? [`🚨 ${varCount} VAR straffespark registreret i denne kamp — husk at opdatere VAR-tælleren under "VAR Straffe" fanen`] : []),
       ...warnings,
     ])
-    setMsg(`✅ Parsede ${matched.length} begivenheder${varCount > 0 ? ` (${varCount} VAR straffe ⚽)` : ''}${warnings.length ? ` · ${warnings.length} kræver bekræftelse` : ' — alt matchet!'}`)
+    setMsg(`✅ Parsede ${matched.length} begivenheder${shootout ? ' + straffesparkskonkurrence' : ''}${varCount > 0 ? ` (${varCount} VAR straffe ⚽)` : ''}${warnings.length ? ` · ${warnings.length} kræver bekræftelse` : ' — alt matchet!'}`)
     setShowPaste(false)
     setPasteText('')
   }
